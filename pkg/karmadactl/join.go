@@ -101,6 +101,9 @@ type CommandJoinOption struct {
 
 	// ClusterProvider is the cluster's provider.
 	ClusterProvider string
+
+	// ClusterLabels is the cluster's labels.
+	ClusterLabels string
 }
 
 // Complete ensures that options are valid and marshals them if necessary.
@@ -139,6 +142,7 @@ func (j *CommandJoinOption) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&j.ClusterKubeConfig, "cluster-kubeconfig", "",
 		"Path of the cluster's kubeconfig.")
 	flags.StringVar(&j.ClusterProvider, "cluster-provider", "", "Provider of the joining cluster.")
+	flags.StringVarP(&j.ClusterLabels, "cluster-labels", "l",  "","Labels of cluster. (e.g. key1=value1,key2=value2)")
 }
 
 // RunJoin is the implementation of the 'join' command.
@@ -323,6 +327,19 @@ func generateClusterInControllerPlane(controlPlaneConfig, clusterConfig *rest.Co
 	clusterObj.Spec.ImpersonatorSecretRef = &clusterv1alpha1.LocalSecretReference{
 		Namespace: impersonatorSecret.Namespace,
 		Name:      impersonatorSecret.Name,
+	}
+
+	if opts.ClusterLabels != "" {
+		l := strings.Split(opts.ClusterLabels, ",")
+		labels := make(map[string]string)
+		for _, kv := range l {
+			items := strings.SplitN(kv, "=", 2)
+			if len(items) != 2 {
+				continue
+			}
+			labels[items[0]] = items[1]
+		}
+		clusterObj.Labels = labels
 	}
 
 	if opts.ClusterProvider != "" {
