@@ -95,7 +95,7 @@ scheduler:
     ## @param scheduler.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param scheduler.image.tag overrides the image tag whose default is the latest
-    tag: v1.0.0-59-g361978a
+    tag: v1.0.0-221-g5d9029b
   ## @param scheduler.resources
   resources:
     limits:
@@ -132,7 +132,7 @@ webhook:
     ## @param webhook.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param webhook.image.tag overrides the image tag whose default is the latest
-    tag: v1.0.0-59-g361978a
+    tag: v1.0.0-221-g5d9029b
   ## @param webhook.resources
   resources: { }
     # If you do want to specify resources, uncomment the following
@@ -171,7 +171,7 @@ controllerManager:
     ## @param controllerManager.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param controllerManager.image.tag overrides the image tag whose default is the latest
-    tag: v1.0.0-59-g361978a
+    tag: v1.0.0-221-g5d9029b
   ## @param controllerManager.resources
   resources:
     limits:
@@ -260,7 +260,7 @@ aggregatedApiServer:
     ## @param aggregatedApiServer.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param aggregatedApiServer.image.tag overrides the image tag whose default is the latest
-    tag: v1.0.0-59-g361978a
+    tag: v1.0.0-221-g5d9029b
   ## @param aggregatedApiServer.resources
   resources: 
     limits:
