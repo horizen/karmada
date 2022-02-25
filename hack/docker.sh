@@ -7,7 +7,7 @@ set -o pipefail
 # This script holds docker related functions.
 
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-REGISTRY=${REGISTRY:-"swr.ap-southeast-1.myhuaweicloud.com/karmada"}
+REGISTRY=${REGISTRY:-"ccr.ccs.tencentyun.com/qcloud-ti-platform"}
 VERSION=${VERSION:="unknown"}
 
 function build_images() {
