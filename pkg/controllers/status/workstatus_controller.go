@@ -2,7 +2,6 @@ package status
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -10,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
@@ -159,7 +157,7 @@ func (c *WorkStatusController) syncWorkStatus(key util.QueueKey) error {
 		return fmt.Errorf("invalid key")
 	}
 
-	observedObj, err := helper.GetObjectFromCache(c.RESTMapper, c.InformerManager, fedKey, c.Client, c.ClusterClientSetFunc)
+	observedObj, err := helper.GetObjectFromCache(c.RESTMapper, c.InformerManager, fedKey)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return c.handleDeleteEvent(fedKey)
@@ -285,7 +283,7 @@ func (c *WorkStatusController) reflectStatus(work *workv1alpha1.Work, clusterObj
 	}
 
 	if statusMap != nil {
-		rawExtension, err := c.buildStatusRawExtension(statusMap)
+		rawExtension, err := helper.BuildStatusRawExtension(statusMap)
 		if err != nil {
 			return err
 		}
@@ -293,11 +291,20 @@ func (c *WorkStatusController) reflectStatus(work *workv1alpha1.Work, clusterObj
 	}
 
 	return retry.RetryOnConflict(retry.DefaultRetry, func() (err error) {
-		if err = c.Get(context.TODO(), client.ObjectKey{Namespace: work.Namespace, Name: work.Name}, work); err != nil {
-			return err
-		}
 		work.Status.ManifestStatuses = c.mergeStatus(work.Status.ManifestStatuses, manifestStatus)
-		return c.Status().Update(context.TODO(), work)
+		updateErr := c.Status().Update(context.TODO(), work)
+		if updateErr == nil {
+			return nil
+		}
+
+		updated := &workv1alpha1.Work{}
+		if err = c.Get(context.TODO(), client.ObjectKey{Namespace: work.Namespace, Name: work.Name}, updated); err == nil {
+			//make a copy, so we don't mutate the shared cache
+			work = updated.DeepCopy()
+		} else {
+			klog.Errorf("failed to get updated work %s/%s: %v", work.Namespace, work.Name, err)
+		}
+		return updateErr
 	})
 }
 
@@ -325,18 +332,6 @@ func (c *WorkStatusController) buildStatusIdentifier(work *workv1alpha1.Work, cl
 	}
 
 	return identifier, nil
-}
-
-func (c *WorkStatusController) buildStatusRawExtension(status map[string]interface{}) (*runtime.RawExtension, error) {
-	statusJSON, err := json.Marshal(status)
-	if err != nil {
-		klog.Errorf("Failed to marshal status. Error: %v.", statusJSON)
-		return nil, err
-	}
-
-	return &runtime.RawExtension{
-		Raw: statusJSON,
-	}, nil
 }
 
 func (c *WorkStatusController) mergeStatus(statuses []workv1alpha1.ManifestStatus, newStatus workv1alpha1.ManifestStatus) []workv1alpha1.ManifestStatus {

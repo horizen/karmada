@@ -60,6 +60,10 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 		},
 	}
 
+	// Init log flags
+	// TODO(@RainbowMango): Group the flags to "logs" flag set.
+	klog.InitFlags(flag.CommandLine)
+
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
 	cmd.AddCommand(sharedcommand.NewCmdVersion(os.Stdout, "karmada-controller-manager"))
 	opts.AddFlags(cmd.Flags(), controllers.ControllerNames())
@@ -83,6 +87,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
 		HealthProbeBindAddress:     net.JoinHostPort(opts.BindAddress, strconv.Itoa(opts.SecurePort)),
 		LivenessEndpointName:       "/healthz",
+		MetricsBindAddress:         opts.MetricsBindAddress,
 	})
 	if err != nil {
 		klog.Errorf("failed to build controller manager: %v", err)
