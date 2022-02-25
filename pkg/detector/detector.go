@@ -264,6 +264,10 @@ func (d *ResourceDetector) Reconcile(key util.QueueKey) error {
 
 // EventFilter tells if an object should be take care of.
 //
+// All objects under Kubernetes reserved namespace should be ignored:
+// - kube-system
+// - kube-public
+// - kube-node-lease
 // All objects under Karmada reserved namespace should be ignored:
 // - karmada-system
 // - karmada-cluster

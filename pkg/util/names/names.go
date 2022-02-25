@@ -113,7 +113,8 @@ func GenerateEstimatorServiceName(clusterName string) string {
 func IsReservedNamespace(namespace string) bool {
 	return namespace == NamespaceKarmadaSystem ||
 		namespace == NamespaceKarmadaCluster ||
-		strings.HasPrefix(namespace, ExecutionSpacePrefix)
+		strings.HasPrefix(namespace, ExecutionSpacePrefix) ||
+		strings.HasPrefix(namespace, KubernetesReservedNSPrefix)
 }
 
 // GenerateImpersonationSecretName generates the secret name of impersonation secret.
