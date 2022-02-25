@@ -19,12 +19,12 @@ components: []
 
 ## pre-install job config
 preInstallJob:
-  initContainerImage: cfssl/cfssl
-  preInstallContainerImage: bitnami/kubectl:latest
+  initContainerImage: ccr.ccs.tencentyun.com/qcloud-ti-platform/cfssl:latest
+  preInstallContainerImage: ccr.ccs.tencentyun.com/qcloud-ti-platform/kubectl:latest
 
 ## post-install job config
 postInstallJob:
-  postInstallContainerImage: bitnami/kubectl:latest
+  postInstallContainerImage: ccr.ccs.tencentyun.com/qcloud-ti-platform/kubectl:latest
 
 ## karmada certificate config
 certs:
@@ -82,7 +82,7 @@ scheduler:
   labels:
     app: karmada-scheduler
   ## @param scheduler.replicaCount target replicas
-  replicaCount: 1
+  replicaCount: 2
   ## @param scheduler.podAnnotations
   podAnnotations: { }
   ## @param scheduler.podLabels
@@ -91,21 +91,19 @@ scheduler:
   imagePullSecrets: [ ]
   image:
     ## @param scheduler.image.repository image of the scheduler
-    repository: swr.ap-southeast-1.myhuaweicloud.com/karmada/karmada-scheduler
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/karmada-scheduler
     ## @param scheduler.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param scheduler.image.tag overrides the image tag whose default is the latest
-    tag: latest
+    tag: v1.0.0-59-g361978a
   ## @param scheduler.resources
-  resources: { }
-    # If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
   ## @param scheduler.nodeSelector
   nodeSelector: { }
   ## @param scheduler.affinity
@@ -130,11 +128,11 @@ webhook:
   imagePullSecrets: [ ]
   image:
     ## @param webhook.image.repository image of the webhook
-    repository: swr.ap-southeast-1.myhuaweicloud.com/karmada/karmada-webhook
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/karmada-webhook
     ## @param webhook.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param webhook.image.tag overrides the image tag whose default is the latest
-    tag: latest
+    tag: v1.0.0-59-g361978a
   ## @param webhook.resources
   resources: { }
     # If you do want to specify resources, uncomment the following
@@ -169,21 +167,19 @@ controllerManager:
   imagePullSecrets: [ ]
   image:
     ## @param controllerManager.image.repository image of the controller manager
-    repository: swr.ap-southeast-1.myhuaweicloud.com/karmada/karmada-controller-manager
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/karmada-controller-manager
     ## @param controllerManager.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param controllerManager.image.tag overrides the image tag whose default is the latest
-    tag: latest
+    tag: v1.0.0-59-g361978a
   ## @param controllerManager.resources
-  resources: { }
-    # If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
   ## @param controllerManager.nodeSelector
   nodeSelector: { }
   ## @param controllerManager.affinity
@@ -208,21 +204,19 @@ apiServer:
   imagePullSecrets: []
   image:
     ## @param apiServer.image.repository image of the apiserver
-    repository: k8s.gcr.io/kube-apiserver
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/kube-apiserver
     ## @param apiServer.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param apiServer.image.tag overrides the image tag whose default is the latest
     tag: "v1.21.7"
   ## @param apiServer.resources
-  resources: { }
-    # If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
   ## @param apiServer.hostNetwork
   ## "true" means using hostNetwork
   ## "false" means normal network
@@ -260,23 +254,19 @@ aggregatedApiServer:
   imagePullSecrets: []
   image:
     ## @param aggregatedApiServer.image.repository image of the apiserver
-    repository: swr.ap-southeast-1.myhuaweicloud.com/karmada/karmada-aggregated-apiserver
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/karmada-aggregated-apiserver
     ## @param aggregatedApiServer.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param aggregatedApiServer.image.tag overrides the image tag whose default is the latest
-    tag: latest
+    tag: v1.0.0-59-g361978a
   ## @param aggregatedApiServer.resources
   resources: 
+    limits:
+      cpu: 2
+      memory: 4Gi
     requests:
-      cpu: 100m
-    # If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+      cpu: 2
+      memory: 4Gi
   ## @param aggregatedApiServer.nodeSelector
   nodeSelector: { }
   ## @param aggregatedApiServer.affinity
@@ -301,21 +291,19 @@ kubeControllerManager:
   imagePullSecrets: []
   image:
     ## @param kubeControllerManager.image.repository image of the kube controller manager
-    repository: k8s.gcr.io/kube-controller-manager
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/kube-controller-manager
     ## @param kubeControllerManager.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param kubeControllerManager.image.tag overrides the image tag whose default is the latest
     tag: "v1.21.7"
   ## @param kubeControllerManager.resources
   resources:
-    # If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
   ## @param kubeControllerManager.nodeSelector
   nodeSelector: {}
   ## @param kubeControllerManager.affinity
@@ -330,39 +318,101 @@ etcd:
   ## @param etcd.mode "external" and "internal" are provided
   ## "external" means use external ectd 
   ## "internal" means install a etcd in the cluster
-  mode: "internal"
+  mode: "external"
   external:
     ## @param etcd.external.servers servers of etcd
     ## such as "https://192.168.1.1:2379,https://192.168.1.2:2379,https://192.168.1.3:2379"
-    servers: ""
+    servers: https://11.139.61.179:2379
     ## @param etcd.external.registryPrefix use to registry prefix of etcd
     registryPrefix: "/registry/karmada"
     certs:
       ## @param etcd.external.certs.caCrt ca of the certificate
       caCrt: |
         -----BEGIN CERTIFICATE-----
-        XXXXXXXXXXXXXXXXXXXXXXXXXXX
+        MIIDkjCCAnqgAwIBAgIIcX+r/VZV+1IwDQYJKoZIhvcNAQELBQAwZzELMAkGA1UE
+        BhMCQ04xEjAQBgNVBAgTCUd1YW5nZG9uZzERMA8GA1UEBxMIU2hlbnpoZW4xFjAU
+        BgNVBAoTDVRlbmNlbnQgQ2xvdWQxGTAXBgNVBAMTEGV0Y2QtY2VmNXh3NnMtY2Ew
+        HhcNMjIwMTE2MTQwNjIxWhcNNDIwMTE2MTQwNjIxWjBnMQswCQYDVQQGEwJDTjES
+        MBAGA1UECBMJR3Vhbmdkb25nMREwDwYDVQQHEwhTaGVuemhlbjEWMBQGA1UEChMN
+        VGVuY2VudCBDbG91ZDEZMBcGA1UEAxMQZXRjZC1jZWY1eHc2cy1jYTCCASIwDQYJ
+        KoZIhvcNAQEBBQADggEPADCCAQoCggEBALxDDISlVeCuWMenm5wJVasMDdhdq4FM
+        cqEmvP4ilTnCRFU0ZwoePpyruZHPr7jBrs2db1503w4nQ5heDlbXrdf6e1+4UmWi
+        CBnw3AVofGwexVNDT2W8g9HpVwfBcyannMVQVsbBkXYFgxEUXTzdk/qddEwl5dqE
+        G4pK/jS2p453VoZOW77sRPi/MOiHrDhfPuEAaYE80IMK7vkUZXtsMaIPEevR22P5
+        OeftX1fmR2npsCEC27MB+JHn/ZnLaqur1S7QI8kGp56CpbwXUOwEkdJjO9vbCBz1
+        cLfLjJFKqvdvvYp4Iz1hxHgq8AqzjB00VcPdNszCzZhPAGZOdjtdAdsCAwEAAaNC
+        MEAwDgYDVR0PAQH/BAQDAgKEMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFIKV
+        zdqvroCAvM8/7zemFnsQFyW5MA0GCSqGSIb3DQEBCwUAA4IBAQAaNhbCcRdcC3SR
+        WVhy8XT05CLygCJyHW7BA9klv7DbYBt8FLSGs7etf35aruqFY0RGrxdy45aVEfDl
+        +rLADgw6I9Xa43VwXSa3D+NHPa9+ZiDrObkfVcEvO216ZN7iN1abKz4HjnndWeHf
+        PxDGHjF5CXW0tIFdRM83J+7umecW9AW/a3jYfIZ8oAPatbvZtbVjwrGtTu4vfHhr
+        YSEQZXfqTz/OHa2Oip7NVORGXTIEzEpfgLsWiBEdVZuwXOk/gZCriZUri5NVkxts
+        CdW+L2JEFDmQ+5HKfCNTX3deWc7JiEyVW/mY0v/63zqA5Ih+vZMFykXJwG86dEeP
+        t8yzZ19f
         -----END CERTIFICATE-----
       ## @param etcd.external.certs.crt crt of the certificate
       crt: |
         -----BEGIN CERTIFICATE-----
-        XXXXXXXXXXXXXXXXXXXXXXXXXXX
+        MIIDpDCCAoygAwIBAgIIEh0DOf34higwDQYJKoZIhvcNAQELBQAwZzELMAkGA1UE
+        BhMCQ04xEjAQBgNVBAgTCUd1YW5nZG9uZzERMA8GA1UEBxMIU2hlbnpoZW4xFjAU
+        BgNVBAoTDVRlbmNlbnQgQ2xvdWQxGTAXBgNVBAMTEGV0Y2QtY2VmNXh3NnMtY2Ew
+        HhcNMjIwMTE2MTQwNzMwWhcNNDIwMTE2MTQwNzMwWjBbMQswCQYDVQQGEwJDTjES
+        MBAGA1UECBMJR3Vhbmdkb25nMREwDwYDVQQHEwhTaGVuemhlbjEWMBQGA1UEChMN
+        VGVuY2VudCBDbG91ZDENMAsGA1UEAxMEcm9vdDCCASIwDQYJKoZIhvcNAQEBBQAD
+        ggEPADCCAQoCggEBANjp5NvlnST+4tbynm9UuT/plmjYFir31awat1TT6EaoQvgz
+        TmdGT6RaAtW+MC4qnIg0edL12gUcoASMz0k/yQi8+PbJkoAAz9SdmLSOexGnCVSb
+        ua0VqCF2AabqxSl3Ir8muQP/WtSCxv1/0z7IaosNPfzubNrq0z9t5M8kbwbvEpMY
+        Av6EWZmNwUKPZQ0/bFu91BvdvdTQIF8RWc5k4GSKErGHhV/ckzDoKWpuEZiZR4aH
+        nF5BWXrniCHw9g+efsu1kVNraETqhZ25u+A0ywMyJ7ZYh9HRi6GVBQHT8sjwLU+m
+        ncw/kdPE2hf2nbwiHyQob2u50RfFUIn++HxcMkUCAwEAAaNgMF4wDgYDVR0PAQH/
+        BAQDAgKEMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDATAMBgNVHRMBAf8E
+        AjAAMB8GA1UdIwQYMBaAFIKVzdqvroCAvM8/7zemFnsQFyW5MA0GCSqGSIb3DQEB
+        CwUAA4IBAQC5ae/VrD3qccBmaN688ULwy/DIR8E5jndX1XmyKfEs1LUXR1zAbMEH
+        kG0RMwftaYWXxSvFuRsUDqaM8LpBxOk8EIoHwLt7W9rTYgSQjVNtnjfpVZvWQyDV
+        8AWj1o3DGktramnEiqiCIz716/Zv6DltCKJB04hw6YDwxGvxhzH5od2EiHpevcbQ
+        jjjo33AF9yiPKsthcJEIWh/KS2+0rEN+erdLCGxgpOkbXSMf9stiF8X6bVpLsdkg
+        3FMPCPmKa8S2iBtoFFiqcEQKt3F5HP5h6InZqP6LD2JK873E5Vu5hur5v+1ZUdqd
+        Ri9MiwTbaoG4Ez6P/wAszewBwBBzAyUK
         -----END CERTIFICATE-----
       ## @param etcd.external.certs.key key of the certificate
       key: |
         -----BEGIN RSA PRIVATE KEY-----
-        XXXXXXXXXXXXXXXXXXXXXXXXXXX
+        MIIEowIBAAKCAQEA2Onk2+WdJP7i1vKeb1S5P+mWaNgWKvfVrBq3VNPoRqhC+DNO
+        Z0ZPpFoC1b4wLiqciDR50vXaBRygBIzPST/JCLz49smSgADP1J2YtI57EacJVJu5
+        rRWoIXYBpurFKXcivya5A/9a1ILG/X/TPshqiw09/O5s2urTP23kzyRvBu8SkxgC
+        /oRZmY3BQo9lDT9sW73UG9291NAgXxFZzmTgZIoSsYeFX9yTMOgpam4RmJlHhoec
+        XkFZeueIIfD2D55+y7WRU2toROqFnbm74DTLAzIntliH0dGLoZUFAdPyyPAtT6ad
+        zD+R08TaF/advCIfJChva7nRF8VQif74fFwyRQIDAQABAoIBAQDNUqDacX+NbGOm
+        WWQVOBpeYCqKtbhOFehBD8zn0+pzL4Ss0kvtwAVVKgqy7mNG3/jpiNqkESm9Wvox
+        NGRmDqWpys7TM7yjw6D2vfK1PoVKEVXoq7tXFj/e5Iftyx60AFx4mhvZp9X/gIcB
+        oASC0kzfsLozeDC8DDnIOaqzVOZvpREmvajjJAKWbzRFzgmn7eYaXox45BstVnKy
+        2b3KiSOf8dDahNcPRSxUc8GRdcK0ya+1AmRdyuNCAeMn1hHRmTDzwDrXBy5uaYoh
+        tdoK5AfsYuT5pIiTLD69dWxYbPTVV0VmrdTnm25xYwNGEI+FgQq6tUY4Jj/4tQP+
+        W6lMNa3FAoGBAPH2CpM7RFrfxOUBetL2WZ5ottn4SGPwsvJjwnppO7eAs41unabD
+        2BQNU3Pi1UmiYhXxx5o/ldV0STQSwhY9Bdhr750VHjbGKzkbhhnC6pV8yBCqpDnc
+        rqNdpxvw0nF6zPzSvC9K1qmTiDPP//DmGRdIpp3LD8gzA+Nf1IATicU3AoGBAOV/
+        z7tFEXakSQyhqy5X0h/FwS/c24q8rTfIByKxOXWkZoXOAmvKr3vtA13WGyBet/YV
+        YQKRoGG1aJLA2V7V7j1UQk5CEKPtFk/w5G4zmTlMnMj6igzhc+X3zri7Ic/eP+7W
+        IUXr9KuRihFggXlwDtkvezqTfnO/GGf64z+/CYJjAoGAL5QZGkCCPXhZCEsVMtyc
+        XMjsg8oNuhE/rugs+tMsmfXl2L7So1NJbw/7xALru/IBZZ1Iia1NMk8Ogf3aSnMv
+        bhIzaOkZKt4m67Dc2r34UPLbiGN1racWdCtbS+Q8DXJ/UovB027c7TWEh+OzyVQF
+        xQ1VLhwa+1wEvLZAW/r7kVsCgYAkmPw0ffAp/krT49gbfM+6V1vWWR79gdcRpSlW
+        I/Loyr26qr6CGAFh/srhpOoQgGpPqNsegMCVtEsn0+8WC4GBcDVeq3Rh38YGG4Eh
+        /cJ6e7go6KMpKK7Fxn3FwbnDn0qMuML3loge8AeXe89J4U/M3KCHF8w7gwbOVhj1
+        Km7GxwKBgHx47PYPa67EDoU4n8i5k3INdeLMHCVUA5oUxEud8Ib17n9qX1r2T5Ev
+        W/SmRJWsicpn4wACL8bD16Z0Nbn9zlxzxbhSd4fhqYehc133Jh66vGio2kJ2MEbS
+        KSw7DtKGIDzFzUSoINo04UVDM8yyVxg7z+5AwzL6lF0v/EJWXPah
         -----END RSA PRIVATE KEY-----
   internal:
     ## @param etcd.internal.replicaCount target replicas
     replicaCount: 1
     image:
       ## @param etcd.internal.image.repository image of the etcd
-      repository: k8s.gcr.io/etcd
+      repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/etcd
       ## @param etcd.internal.image.pullPolicy pull policy of image
       pullPolicy: IfNotPresent
       ## @param etcd.internal.image.tag overrides the image tag whose default is the latest
-      tag: "3.4.13-0"
+      tag: "3.5.1-1"
     ## @param etcd.internal.storageType storage type for etcd data
     ## "pvc" means using volumeClaimTemplates
     ## "hostPath" means using hostPath
@@ -419,7 +469,7 @@ agent:
   imagePullSecrets: [ ]
   image:
     ## @param agent.image.repository image of the agent
-    repository: swr.ap-southeast-1.myhuaweicloud.com/karmada/karmada-agent
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/karmada-agent
     ## @param agent.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param agent.image.tag overrides the image tag whose default is the latest
@@ -478,7 +528,7 @@ schedulerEstimator:
   imagePullSecrets: [ ]
   image:
     ## @param schedulerEstimator.image.repository image of the apiserver
-    repository: swr.ap-southeast-1.myhuaweicloud.com/karmada/karmada-scheduler-estimator
+    repository: ccr.ccs.tencentyun.com/qcloud-ti-platform/karmada-scheduler-estimator
     ## @param schedulerEstimator.image.pullPolicy pull policy of image
     pullPolicy: IfNotPresent
     ## @param schedulerEstimator.image.tag overrides the image tag whose default is the latest
