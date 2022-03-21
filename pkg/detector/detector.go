@@ -84,6 +84,8 @@ type ResourceDetector struct {
 	RateLimiterOptions ratelimiterflag.Options
 
 	stopCh <-chan struct{}
+
+	EnabledResource map[string]struct{}
 }
 
 // Start runs the detector, never stop until stopCh closed.
@@ -250,6 +252,8 @@ func (d *ResourceDetector) Reconcile(key util.QueueKey) error {
 		return d.ApplyClusterPolicy(object, clusterWideKey, clusterPolicy)
 	}
 
+	// TODO(willyao) auto create propagation policy when annotation found
+
 	if d.isWaiting(clusterWideKey) {
 		// reaching here means there is no appropriate policy for the object
 		d.EventRecorder.Event(object, corev1.EventTypeWarning, workv1alpha2.EventReasonApplyPolicyFailed, "No policy match for resource")
@@ -283,6 +287,7 @@ func (d *ResourceDetector) Reconcile(key util.QueueKey) error {
 // the specified apis will be ignored as well.
 //
 // If '--skipped-propagating-namespaces' is specified, all APIs in the skipped-propagating-namespaces will be ignored.
+// If '--enable-propagating-resource' is specified, resource in reserved namespace will also be propagated
 func (d *ResourceDetector) EventFilter(obj interface{}) bool {
 	key, err := ClusterWideKeyFunc(obj)
 	if err != nil {
@@ -296,7 +301,16 @@ func (d *ResourceDetector) EventFilter(obj interface{}) bool {
 	}
 
 	if names.IsReservedNamespace(clusterWideKey.Namespace) {
-		return false
+		// 如果手动配置了特定资源的同步，则不过滤
+		var resourceTag string
+		if clusterWideKey.Namespace == "" {
+			resourceTag = fmt.Sprintf("%s/%s", clusterWideKey.Kind, clusterWideKey.Name)
+		} else {
+			resourceTag = fmt.Sprintf("%s/%s/%s", clusterWideKey.Kind, clusterWideKey.Namespace, clusterWideKey.Name)
+		}
+		if _, ok := d.EnabledResource[resourceTag]; !ok {
+			return false
+		}
 	}
 
 	if d.SkippedResourceConfig != nil {
