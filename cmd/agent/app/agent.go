@@ -13,11 +13,15 @@ import (
 	kubeclientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/term"
 	"k8s.io/klog/v2"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 
 	"github.com/karmada-io/karmada/cmd/agent/app/options"
 	clusterv1alpha1 "github.com/karmada-io/karmada/pkg/apis/cluster/v1alpha1"
+	workv1alpha1 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha1"
 	controllerscontext "github.com/karmada-io/karmada/pkg/controllers/context"
 	"github.com/karmada-io/karmada/pkg/controllers/execution"
 	"github.com/karmada-io/karmada/pkg/controllers/mcs"
@@ -25,6 +29,8 @@ import (
 	karmadaclientset "github.com/karmada-io/karmada/pkg/generated/clientset/versioned"
 	"github.com/karmada-io/karmada/pkg/karmadactl"
 	"github.com/karmada-io/karmada/pkg/resourceinterpreter"
+	"github.com/karmada-io/karmada/pkg/sharedcli"
+	"github.com/karmada-io/karmada/pkg/sharedcli/klogflag"
 	"github.com/karmada-io/karmada/pkg/util"
 	"github.com/karmada-io/karmada/pkg/util/gclient"
 	"github.com/karmada-io/karmada/pkg/util/helper"
@@ -63,13 +69,22 @@ func NewAgentCommand(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	// Init log flags
-	// TODO(@RainbowMango): Group the flags to "logs" flag set.
-	klog.InitFlags(flag.CommandLine)
+	fss := cliflag.NamedFlagSets{}
 
-	opts.AddFlags(cmd.Flags(), controllers.ControllerNames())
+	genericFlagSet := fss.FlagSet("generic")
+	genericFlagSet.AddGoFlagSet(flag.CommandLine)
+	opts.AddFlags(genericFlagSet, controllers.ControllerNames())
+
+	// Set klog flags
+	logsFlagSet := fss.FlagSet("logs")
+	klogflag.Add(logsFlagSet)
+
 	cmd.AddCommand(sharedcommand.NewCmdVersion(os.Stdout, "karmada-agent"))
-	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+	cmd.Flags().AddFlagSet(genericFlagSet)
+	cmd.Flags().AddFlagSet(logsFlagSet)
+
+	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
+	sharedcli.SetUsageAndHelpFunc(cmd, fss, cols)
 	return cmd
 }
 
@@ -126,6 +141,12 @@ func run(ctx context.Context, karmadaConfig karmadactl.KarmadaConfig, opts *opti
 		LeaderElectionID:           fmt.Sprintf("karmada-agent-%s", opts.ClusterName),
 		LeaderElectionNamespace:    opts.LeaderElection.ResourceNamespace,
 		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
+		Controller: v1alpha1.ControllerConfigurationSpec{
+			GroupKindConcurrency: map[string]int{
+				workv1alpha1.SchemeGroupVersion.WithKind("Work").GroupKind().String():       opts.ConcurrentWorkSyncs,
+				clusterv1alpha1.SchemeGroupVersion.WithKind("Cluster").GroupKind().String(): opts.ConcurrentClusterSyncs,
+			},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build controller manager: %w", err)
@@ -165,6 +186,8 @@ func setupControllers(mgr controllerruntime.Manager, opts *options.Options, stop
 			ClusterCacheSyncTimeout:           opts.ClusterCacheSyncTimeout,
 			ClusterAPIQPS:                     opts.ClusterAPIQPS,
 			ClusterAPIBurst:                   opts.ClusterAPIBurst,
+			ConcurrentWorkSyncs:               opts.ConcurrentWorkSyncs,
+			RateLimiterOptions:                opts.RateLimiterOpts,
 		},
 		StopChan: stopChan,
 	}
@@ -197,6 +220,7 @@ func startClusterStatusController(ctx controllerscontext.Context) (bool, error) 
 		ClusterLeaseDuration:              ctx.Opts.ClusterLeaseDuration,
 		ClusterLeaseRenewIntervalFraction: ctx.Opts.ClusterLeaseRenewIntervalFraction,
 		ClusterCacheSyncTimeout:           ctx.Opts.ClusterCacheSyncTimeout,
+		RateLimiterOptions:                ctx.Opts.RateLimiterOptions,
 	}
 	if err := clusterStatusController.SetupWithManager(ctx.Mgr); err != nil {
 		return false, err
@@ -213,6 +237,7 @@ func startExecutionController(ctx controllerscontext.Context) (bool, error) {
 		PredicateFunc:        helper.NewExecutionPredicateOnAgent(),
 		InformerManager:      informermanager.GetInstance(),
 		ClusterClientSetFunc: util.NewClusterDynamicClientSetForAgent,
+		RatelimiterOptions:   ctx.Opts.RateLimiterOptions,
 	}
 	if err := executionController.SetupWithManager(ctx.Mgr); err != nil {
 		return false, err
@@ -222,16 +247,17 @@ func startExecutionController(ctx controllerscontext.Context) (bool, error) {
 
 func startWorkStatusController(ctx controllerscontext.Context) (bool, error) {
 	workStatusController := &status.WorkStatusController{
-		Client:                  ctx.Mgr.GetClient(),
-		EventRecorder:           ctx.Mgr.GetEventRecorderFor(status.WorkStatusControllerName),
-		RESTMapper:              ctx.Mgr.GetRESTMapper(),
-		InformerManager:         informermanager.GetInstance(),
-		StopChan:                ctx.StopChan,
-		WorkerNumber:            1,
-		ObjectWatcher:           ctx.ObjectWatcher,
-		PredicateFunc:           helper.NewExecutionPredicateOnAgent(),
-		ClusterClientSetFunc:    util.NewClusterDynamicClientSetForAgent,
-		ClusterCacheSyncTimeout: ctx.Opts.ClusterCacheSyncTimeout,
+		Client:                    ctx.Mgr.GetClient(),
+		EventRecorder:             ctx.Mgr.GetEventRecorderFor(status.WorkStatusControllerName),
+		RESTMapper:                ctx.Mgr.GetRESTMapper(),
+		InformerManager:           informermanager.GetInstance(),
+		StopChan:                  ctx.StopChan,
+		ObjectWatcher:             ctx.ObjectWatcher,
+		PredicateFunc:             helper.NewExecutionPredicateOnAgent(),
+		ClusterClientSetFunc:      util.NewClusterDynamicClientSetForAgent,
+		ClusterCacheSyncTimeout:   ctx.Opts.ClusterCacheSyncTimeout,
+		ConcurrentWorkStatusSyncs: ctx.Opts.ConcurrentWorkSyncs,
+		RateLimiterOptions:        ctx.Opts.RateLimiterOptions,
 	}
 	workStatusController.RunWorkQueue()
 	if err := workStatusController.SetupWithManager(ctx.Mgr); err != nil {
@@ -247,7 +273,7 @@ func startServiceExportController(ctx controllerscontext.Context) (bool, error) 
 		RESTMapper:                  ctx.Mgr.GetRESTMapper(),
 		InformerManager:             informermanager.GetInstance(),
 		StopChan:                    ctx.StopChan,
-		WorkerNumber:                1,
+		WorkerNumber:                3,
 		PredicateFunc:               helper.NewPredicateForServiceExportControllerOnAgent(ctx.Opts.ClusterName),
 		ClusterDynamicClientSetFunc: util.NewClusterDynamicClientSetForAgent,
 		ClusterCacheSyncTimeout:     ctx.Opts.ClusterCacheSyncTimeout,

@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/distribution/distribution/v3 v3.0.0-20210507173845-9329f6a62b67
-	github.com/evanphx/json-patch/v5 v5.2.0
+	github.com/evanphx/json-patch/v5 v5.6.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/uuid v1.1.2
 	github.com/kr/pretty v0.3.0
@@ -16,6 +16,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/vektra/mockery/v2 v2.9.4
 	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b
+	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 	golang.org/x/tools v0.1.6-0.20210820212750-d4cc65f0b2ff
 	gomodules.xyz/jsonpatch/v2 v2.2.0
 	google.golang.org/grpc v1.40.0
@@ -35,7 +36,7 @@ require (
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed
 	sigs.k8s.io/cluster-api v1.0.1
 	sigs.k8s.io/controller-runtime v0.11.1
-	sigs.k8s.io/kind v0.11.1
+	sigs.k8s.io/kind v0.12.0
 	sigs.k8s.io/mcs-api v0.1.0
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1
 	sigs.k8s.io/yaml v1.3.0
@@ -43,7 +44,7 @@ require (
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
-	github.com/BurntSushi/toml v0.3.1 // indirect
+	github.com/BurntSushi/toml v0.4.1 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
@@ -143,7 +144,6 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20211029165221-6e7872819dc8 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20210831024726-fe130286e0e2 // indirect

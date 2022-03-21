@@ -8,6 +8,7 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 
 	"github.com/karmada-io/karmada/pkg/resourceinterpreter"
+	"github.com/karmada-io/karmada/pkg/sharedcli/ratelimiterflag"
 	"github.com/karmada-io/karmada/pkg/util/informermanager"
 	"github.com/karmada-io/karmada/pkg/util/objectwatcher"
 	"github.com/karmada-io/karmada/pkg/util/overridemanager"
@@ -47,6 +48,10 @@ type Options struct {
 	SkippedPropagatingNamespaces []string
 	// ClusterName is the name of cluster.
 	ClusterName string
+	// ConcurrentWorkSyncs is the number of Works that are allowed to sync concurrently.
+	ConcurrentWorkSyncs int
+	// RateLimiterOptions contains the options for rate limiter.
+	RateLimiterOptions ratelimiterflag.Options
 }
 
 // Context defines the context object for controller.

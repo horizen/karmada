@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -25,10 +26,8 @@ import (
 	"github.com/karmada-io/karmada/pkg/karmadactl/cmdinit/utils"
 )
 
-const namespace = "karmada-system"
-
 // InitKarmadaResources Initialize karmada resource
-func InitKarmadaResources(dir, caBase64 string) error {
+func InitKarmadaResources(dir, caBase64 string, systemNamespace string) error {
 	restConfig, err := utils.RestConfig(filepath.Join(dir, options.KarmadaKubeConfigName))
 	if err != nil {
 		return err
@@ -42,7 +41,7 @@ func InitKarmadaResources(dir, caBase64 string) error {
 	// create namespace
 	if _, err := clientSet.CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
+			Name: systemNamespace,
 		},
 	}, metav1.CreateOptions{}); err != nil {
 		klog.Exitln(err)
@@ -79,18 +78,18 @@ func InitKarmadaResources(dir, caBase64 string) error {
 
 	// create webhook configuration
 	// https://github.com/karmada-io/karmada/blob/master/artifacts/deploy/webhook-configuration.yaml
-	klog.Info("Crate MutatingWebhookConfiguration mutating-config.")
-	if err = createMutatingWebhookConfiguration(clientSet, mutatingConfig(caBase64)); err != nil {
+	klog.Info("Create MutatingWebhookConfiguration mutating-config.")
+	if err = createMutatingWebhookConfiguration(clientSet, mutatingConfig(caBase64, systemNamespace)); err != nil {
 		klog.Exitln(err)
 	}
-	klog.Info("Crate ValidatingWebhookConfiguration validating-config.")
+	klog.Info("Create ValidatingWebhookConfiguration validating-config.")
 
-	if err = createValidatingWebhookConfiguration(clientSet, validatingConfig(caBase64)); err != nil {
+	if err = createValidatingWebhookConfiguration(clientSet, validatingConfig(caBase64, systemNamespace)); err != nil {
 		klog.Exitln(err)
 	}
 
 	// karmada-aggregated-apiserver
-	if err = initAPIService(clientSet, restConfig); err != nil {
+	if err = initAPIService(clientSet, restConfig, systemNamespace); err != nil {
 		klog.Exitln(err)
 	}
 
@@ -162,7 +161,7 @@ func getName(str, start, end string) string {
 	return str
 }
 
-func initAPIService(clientSet *kubernetes.Clientset, restConfig *rest.Config) error {
+func initAPIService(clientSet *kubernetes.Clientset, restConfig *rest.Config, systemNamespace string) error {
 	// https://github.com/karmada-io/karmada/blob/master/artifacts/deploy/apiservice.yaml
 	aaService := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -171,14 +170,14 @@ func initAPIService(clientSet *kubernetes.Clientset, restConfig *rest.Config) er
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "karmada-aggregated-apiserver",
-			Namespace: namespace,
+			Namespace: systemNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Type:         corev1.ServiceTypeExternalName,
-			ExternalName: fmt.Sprintf("karmada-aggregated-apiserver.%s.svc.cluster.local", namespace),
+			ExternalName: fmt.Sprintf("karmada-aggregated-apiserver.%s.svc", systemNamespace),
 		},
 	}
-	if _, err := clientSet.CoreV1().Services(namespace).Create(context.TODO(), aaService, metav1.CreateOptions{}); err != nil {
+	if _, err := clientSet.CoreV1().Services(systemNamespace).Create(context.TODO(), aaService, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 	// new apiRegistrationClient
@@ -203,7 +202,7 @@ func initAPIService(clientSet *kubernetes.Clientset, restConfig *rest.Config) er
 			GroupPriorityMinimum:  2000,
 			Service: &apiregistrationv1.ServiceReference{
 				Name:      "karmada-aggregated-apiserver",
-				Namespace: namespace,
+				Namespace: systemNamespace,
 			},
 			Version:         "v1alpha1",
 			VersionPriority: 10,
@@ -231,6 +230,8 @@ func initAPIService(clientSet *kubernetes.Clientset, restConfig *rest.Config) er
 	if _, err := apiRegistrationClient.ApiregistrationV1().APIServices().Create(context.TODO(), aaAPIService, metav1.CreateOptions{}); err != nil {
 		return err
 	}
-
+	if err := waitAPIServiceReady(apiRegistrationClient, aaAPIServiceObjName, 120*time.Second); err != nil {
+		return err
+	}
 	return nil
 }

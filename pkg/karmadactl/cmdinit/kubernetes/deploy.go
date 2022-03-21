@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,6 +34,8 @@ var certList = []string{
 	options.FrontProxyCaCertAndKeyName,
 	options.FrontProxyClientCertAndKeyName,
 }
+
+var defaultKubeConfig = filepath.Join(homeDir(), ".kube", "config")
 
 // CommandInitOption holds all flags options for init.
 type CommandInitOption struct {
@@ -70,10 +74,6 @@ type CommandInitOption struct {
 
 // Validate Check that there are enough flags to run the command.
 func (i *CommandInitOption) Validate(parentCommand string) error {
-	if !utils.PathIsExist(i.KubeConfig) {
-		return fmt.Errorf("kubeconfig file does not exist.absolute path to the kubeconfig file")
-	}
-
 	if i.EtcdStorageMode == "hostPath" && i.EtcdHostDataPath == "" {
 		return fmt.Errorf("when etcd storage mode is hostPath, dataPath is not empty. See '%s init --help'", parentCommand)
 	}
@@ -95,6 +95,16 @@ func (i *CommandInitOption) Validate(parentCommand string) error {
 
 // Complete Initialize k8s client
 func (i *CommandInitOption) Complete() error {
+	// check config path of host kubernetes cluster
+	if i.KubeConfig == "" {
+		env := os.Getenv("KUBECONFIG")
+		if env != "" {
+			i.KubeConfig = env
+		} else {
+			i.KubeConfig = defaultKubeConfig
+		}
+	}
+
 	restConfig, err := utils.RestConfig(i.KubeConfig)
 	if err != nil {
 		return err
@@ -126,6 +136,13 @@ func (i *CommandInitOption) Complete() error {
 	if i.EtcdStorageMode == "hostPath" && i.EtcdNodeSelectorLabels != "" {
 		if !i.isNodeExist(i.EtcdNodeSelectorLabels) {
 			return fmt.Errorf("no node found by label %s", i.EtcdNodeSelectorLabels)
+		}
+	}
+
+	// Determine whether KarmadaDataPath exists, if so, delete it
+	if utils.IsExist(i.KarmadaDataPath) {
+		if err := os.RemoveAll(i.KarmadaDataPath); err != nil {
+			return err
 		}
 	}
 
@@ -284,6 +301,19 @@ func (i *CommandInitOption) initKarmadaAPIServer() error {
 	if err := WaitPodReady(i.KubeClientSet, i.Namespace, utils.MapToString(apiServerLabels), 120); err != nil {
 		return err
 	}
+
+	// Create karmada-aggregated-apiserver
+	// https://github.com/karmada-io/karmada/blob/master/artifacts/deploy/karmada-aggregated-apiserver.yaml
+	klog.Info("create karmada aggregated apiserver Deployment")
+	if err := i.CreateService(i.karmadaAggregatedAPIServerService()); err != nil {
+		klog.Exitln(err)
+	}
+	if _, err := i.KubeClientSet.AppsV1().Deployments(i.Namespace).Create(context.TODO(), i.makeKarmadaAggregatedAPIServerDeployment(), metav1.CreateOptions{}); err != nil {
+		klog.Warning(err)
+	}
+	if err := WaitPodReady(i.KubeClientSet, i.Namespace, utils.MapToString(aggregatedAPIServerLabels), 30); err != nil {
+		klog.Warning(err)
+	}
 	return nil
 }
 
@@ -316,7 +346,7 @@ func (i *CommandInitOption) initKarmadaComponent() error {
 	}
 
 	// Create karmada-controller-manager
-	// https://github.com/karmada-io/karmada/blob/master/artifacts/deploy/controller-manager.yaml
+	// https://github.com/karmada-io/karmada/blob/master/artifacts/deploy/karmada-controller-manager.yaml
 	klog.Info("create karmada controller manager Deployment")
 	if _, err := deploymentClient.Create(context.TODO(), i.makeKarmadaControllerManagerDeployment(), metav1.CreateOptions{}); err != nil {
 		klog.Warning(err)
@@ -335,18 +365,6 @@ func (i *CommandInitOption) initKarmadaComponent() error {
 		klog.Warning(err)
 	}
 	if err := WaitPodReady(i.KubeClientSet, i.Namespace, utils.MapToString(webhookLabels), waitPodReadyTimeout); err != nil {
-		klog.Warning(err)
-	}
-	// Create karmada-aggregated-apiserver
-	// https://github.com/karmada-io/karmada/blob/master/artifacts/deploy/karmada-aggregated-apiserver.yaml
-	klog.Info("create karmada aggregated apiserver Deployment")
-	if err := i.CreateService(i.karmadaAggregatedAPIServerService()); err != nil {
-		klog.Exitln(err)
-	}
-	if _, err := deploymentClient.Create(context.TODO(), i.makeKarmadaAggregatedAPIServerDeployment(), metav1.CreateOptions{}); err != nil {
-		klog.Warning(err)
-	}
-	if err := WaitPodReady(i.KubeClientSet, i.Namespace, utils.MapToString(aggregatedAPIServerLabels), waitPodReadyTimeout); err != nil {
 		klog.Warning(err)
 	}
 	return nil
@@ -416,7 +434,7 @@ func (i *CommandInitOption) RunInit(_ io.Writer, parentCommand string) error {
 
 	// Create CRDs in karmada
 	caBase64 := base64.StdEncoding.EncodeToString(i.CertAndKeyFileData[fmt.Sprintf("%s.crt", options.CaCertAndKeyName)])
-	if err := karmada.InitKarmadaResources(i.KarmadaDataPath, caBase64); err != nil {
+	if err := karmada.InitKarmadaResources(i.KarmadaDataPath, caBase64, i.Namespace); err != nil {
 		return err
 	}
 
@@ -427,4 +445,11 @@ func (i *CommandInitOption) RunInit(_ io.Writer, parentCommand string) error {
 
 	utils.GenExamples(i.KarmadaDataPath, parentCommand)
 	return nil
+}
+
+func homeDir() string {
+	if h := os.Getenv("HOME"); h != "" {
+		return h
+	}
+	return os.Getenv("USERPROFILE") // windows
 }

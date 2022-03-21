@@ -23,7 +23,7 @@ MEMBER_CLUSTER_2_NAME=${MEMBER_CLUSTER_2_NAME:-"member2"}
 PULL_MODE_CLUSTER_NAME=${PULL_MODE_CLUSTER_NAME:-"member3"}
 HOST_IPADDRESS=${1:-}
 
-CLUSTER_VERSION=${CLUSTER_VERSION:-"kindest/node:v1.22.0"}
+CLUSTER_VERSION=${CLUSTER_VERSION:-"kindest/node:v1.23.4"}
 KIND_LOG_FILE=${KIND_LOG_FILE:-"/tmp/karmada"}
 
 #step0: prepare
@@ -59,7 +59,7 @@ util::cmd_must_exist "go"
 util::verify_go_version
 
 # install kind and kubectl
-kind_version=v0.11.1
+kind_version=v0.12.0
 echo -n "Preparing: 'kind' existence check - "
 if util::cmd_exist kind; then
   echo "passed"
@@ -121,6 +121,7 @@ export VERSION="latest"
 export REGISTRY="swr.ap-southeast-1.myhuaweicloud.com/karmada"
 kind load docker-image "${REGISTRY}/karmada-controller-manager:${VERSION}" --name="${HOST_CLUSTER_NAME}"
 kind load docker-image "${REGISTRY}/karmada-scheduler:${VERSION}" --name="${HOST_CLUSTER_NAME}"
+kind load docker-image "${REGISTRY}/karmada-descheduler:${VERSION}" --name="${HOST_CLUSTER_NAME}"
 kind load docker-image "${REGISTRY}/karmada-webhook:${VERSION}" --name="${HOST_CLUSTER_NAME}"
 kind load docker-image "${REGISTRY}/karmada-scheduler-estimator:${VERSION}" --name="${HOST_CLUSTER_NAME}"
 kind load docker-image "${REGISTRY}/karmada-aggregated-apiserver:${VERSION}" --name="${HOST_CLUSTER_NAME}"
@@ -158,20 +159,6 @@ kind load docker-image "${REGISTRY}/karmada-agent:${VERSION}" --name="${PULL_MOD
 
 #step7. deploy karmada agent in pull mode member clusters
 "${REPO_ROOT}"/hack/deploy-agent-and-estimator.sh "${MAIN_KUBECONFIG}" "${HOST_CLUSTER_NAME}" "${MAIN_KUBECONFIG}" "${KARMADA_APISERVER_CLUSTER_NAME}" "${MEMBER_CLUSTER_KUBECONFIG}" "${PULL_MODE_CLUSTER_NAME}"
-
-#https://textkool.com/en/ascii-art-generator?hl=default&vl=default&font=DOS%20Rebel&text=KARMADA
-KARMADA_GREETING='
-------------------------------------------------------------------------------------------------------
- █████   ████   █████████   ███████████   ██████   ██████   █████████   ██████████     █████████
-░░███   ███░   ███░░░░░███ ░░███░░░░░███ ░░██████ ██████   ███░░░░░███ ░░███░░░░███   ███░░░░░███
- ░███  ███    ░███    ░███  ░███    ░███  ░███░█████░███  ░███    ░███  ░███   ░░███ ░███    ░███
- ░███████     ░███████████  ░██████████   ░███░░███ ░███  ░███████████  ░███    ░███ ░███████████
- ░███░░███    ░███░░░░░███  ░███░░░░░███  ░███ ░░░  ░███  ░███░░░░░███  ░███    ░███ ░███░░░░░███
- ░███ ░░███   ░███    ░███  ░███    ░███  ░███      ░███  ░███    ░███  ░███    ███  ░███    ░███
- █████ ░░████ █████   █████ █████   █████ █████     █████ █████   █████ ██████████   █████   █████
-░░░░░   ░░░░ ░░░░░   ░░░░░ ░░░░░   ░░░░░ ░░░░░     ░░░░░ ░░░░░   ░░░░░ ░░░░░░░░░░   ░░░░░   ░░░░░
-------------------------------------------------------------------------------------------------------
-'
 
 function print_success() {
   echo -e "$KARMADA_GREETING"

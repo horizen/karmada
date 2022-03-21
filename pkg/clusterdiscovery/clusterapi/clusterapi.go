@@ -47,6 +47,7 @@ type ClusterDetector struct {
 	InformerManager       informermanager.SingleClusterInformerManager
 	EventHandler          cache.ResourceEventHandler
 	Processor             util.AsyncWorker
+	ConcurrentReconciles  int
 
 	stopCh <-chan struct{}
 }
@@ -57,8 +58,13 @@ func (d *ClusterDetector) Start(ctx context.Context) error {
 	d.stopCh = ctx.Done()
 
 	d.EventHandler = informermanager.NewHandlerOnEvents(d.OnAdd, d.OnUpdate, d.OnDelete)
-	d.Processor = util.NewAsyncWorker("cluster-api cluster detector", ClusterWideKeyFunc, d.Reconcile)
-	d.Processor.Run(1, d.stopCh)
+	workerOptions := util.Options{
+		Name:          "cluster-api cluster detector",
+		KeyFunc:       ClusterWideKeyFunc,
+		ReconcileFunc: d.Reconcile,
+	}
+	d.Processor = util.NewAsyncWorker(workerOptions)
+	d.Processor.Run(d.ConcurrentReconciles, d.stopCh)
 	d.discoveryCluster()
 
 	<-d.stopCh

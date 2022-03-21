@@ -59,14 +59,19 @@ func ensureWork(
 	overrideManager overridemanager.OverrideManager, binding metav1.Object, scope apiextensionsv1.ResourceScope,
 ) error {
 	var targetClusters []workv1alpha2.TargetCluster
+	var requiredByBindingSnapshot []workv1alpha2.BindingSnapshot
 	switch scope {
 	case apiextensionsv1.NamespaceScoped:
 		bindingObj := binding.(*workv1alpha2.ResourceBinding)
 		targetClusters = bindingObj.Spec.Clusters
+		requiredByBindingSnapshot = bindingObj.Spec.RequiredBy
 	case apiextensionsv1.ClusterScoped:
 		bindingObj := binding.(*workv1alpha2.ClusterResourceBinding)
 		targetClusters = bindingObj.Spec.Clusters
+		requiredByBindingSnapshot = bindingObj.Spec.RequiredBy
 	}
+
+	targetClusters = mergeTargetClusters(targetClusters, requiredByBindingSnapshot)
 
 	var jobCompletions []workv1alpha2.TargetCluster
 	var err error
@@ -140,6 +145,25 @@ func ensureWork(
 	return nil
 }
 
+func mergeTargetClusters(targetClusters []workv1alpha2.TargetCluster, requiredByBindingSnapshot []workv1alpha2.BindingSnapshot) []workv1alpha2.TargetCluster {
+	if len(requiredByBindingSnapshot) == 0 {
+		return targetClusters
+	}
+
+	scheduledClusterNames := util.ConvertToClusterNames(targetClusters)
+
+	for _, requiredByBinding := range requiredByBindingSnapshot {
+		for _, targetCluster := range requiredByBinding.Clusters {
+			if !scheduledClusterNames.Has(targetCluster.Name) {
+				scheduledClusterNames.Insert(targetCluster.Name)
+				targetClusters = append(targetClusters, targetCluster)
+			}
+		}
+	}
+
+	return targetClusters
+}
+
 func getReplicaInfos(targetClusters []workv1alpha2.TargetCluster) (bool, map[string]int64) {
 	if helper.HasScheduledReplica(targetClusters) {
 		return true, transScheduleResultToMap(targetClusters)
@@ -157,8 +181,8 @@ func transScheduleResultToMap(scheduleResult []workv1alpha2.TargetCluster) map[s
 
 func mergeLabel(workload *unstructured.Unstructured, workNamespace string, binding metav1.Object, scope apiextensionsv1.ResourceScope) map[string]string {
 	var workLabel = make(map[string]string)
-	util.MergeLabel(workload, workv1alpha2.WorkNamespaceLabel, workNamespace)
-	util.MergeLabel(workload, workv1alpha2.WorkNameLabel, names.GenerateWorkName(workload.GetKind(), workload.GetName(), workload.GetNamespace()))
+	util.MergeLabel(workload, workv1alpha1.WorkNamespaceLabel, workNamespace)
+	util.MergeLabel(workload, workv1alpha1.WorkNameLabel, names.GenerateWorkName(workload.GetKind(), workload.GetName(), workload.GetNamespace()))
 	if scope == apiextensionsv1.NamespaceScoped {
 		util.MergeLabel(workload, workv1alpha2.ResourceBindingReferenceKey, names.GenerateBindingReferenceKey(binding.GetNamespace(), binding.GetName()))
 		workLabel[workv1alpha2.ResourceBindingReferenceKey] = names.GenerateBindingReferenceKey(binding.GetNamespace(), binding.GetName())

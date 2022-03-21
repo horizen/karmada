@@ -26,6 +26,7 @@ REGISTRY?="swr.ap-southeast-1.myhuaweicloud.com/karmada"
 REGISTRY_USER_NAME?=""
 REGISTRY_PASSWORD?=""
 REGISTRY_SERVER_ADDRESS?=""
+PLATFORMS?="linux/amd64,linux/arm64"
 
 # Set your version by env or using latest tags from git
 VERSION?=""
@@ -39,7 +40,7 @@ ifeq ($(VERSION), "")
     endif
 endif
 
-all: karmada-aggregated-apiserver karmada-controller-manager karmada-scheduler karmadactl kubectl-karmada karmada-webhook karmada-agent karmada-scheduler-estimator karmada-interpreter-webhook-example
+all: karmada-aggregated-apiserver karmada-controller-manager karmada-scheduler karmada-descheduler karmadactl kubectl-karmada karmada-webhook karmada-agent karmada-scheduler-estimator karmada-interpreter-webhook-example
 
 karmada-aggregated-apiserver: $(SOURCES)
 	CGO_ENABLED=0 GOOS=$(GOOS) go build \
@@ -58,6 +59,12 @@ karmada-scheduler: $(SOURCES)
 		-ldflags $(LDFLAGS) \
 		-o karmada-scheduler \
 		cmd/scheduler/main.go
+
+karmada-descheduler: $(SOURCES)
+	CGO_ENABLED=0 GOOS=$(GOOS) go build \
+		-ldflags $(LDFLAGS) \
+		-o karmada-descheduler \
+		cmd/descheduler/main.go
 
 karmadactl: $(SOURCES)
 	CGO_ENABLED=0 GOOS=$(GOOS) go build \
@@ -96,7 +103,7 @@ karmada-interpreter-webhook-example: $(SOURCES)
 		examples/customresourceinterpreter/webhook/main.go
 
 clean:
-	rm -rf karmada-aggregated-apiserver karmada-controller-manager karmada-scheduler karmadactl kubectl-karmada karmada-webhook karmada-agent karmada-scheduler-estimator karmada-interpreter-webhook-example
+	rm -rf karmada-aggregated-apiserver karmada-controller-manager karmada-scheduler karmada-descheduler karmadactl kubectl-karmada karmada-webhook karmada-agent karmada-scheduler-estimator karmada-interpreter-webhook-example
 
 .PHONY: update
 update:
@@ -112,7 +119,7 @@ test:
 	go test --race --v ./cmd/...
 	go test --race --v ./examples/...
 
-images: image-karmada-aggregated-apiserver image-karmada-controller-manager image-karmada-scheduler image-karmada-webhook image-karmada-agent image-karmada-scheduler-estimator image-karmada-interpreter-webhook-example
+images: image-karmada-aggregated-apiserver image-karmada-controller-manager image-karmada-scheduler image-karmada-descheduler image-karmada-webhook image-karmada-agent image-karmada-scheduler-estimator image-karmada-interpreter-webhook-example
 
 image-karmada-aggregated-apiserver: karmada-aggregated-apiserver
 	VERSION=$(VERSION) hack/docker.sh karmada-aggregated-apiserver
@@ -122,6 +129,9 @@ image-karmada-controller-manager: karmada-controller-manager
 
 image-karmada-scheduler: karmada-scheduler
 	VERSION=$(VERSION) hack/docker.sh karmada-scheduler
+
+image-karmada-descheduler: karmada-descheduler
+	VERSION=$(VERSION) hack/docker.sh karmada-descheduler
 
 image-karmada-webhook: karmada-webhook
 	VERSION=$(VERSION) hack/docker.sh karmada-webhook
@@ -142,8 +152,51 @@ ifneq ($(REGISTRY_USER_NAME), "")
 endif
 	docker push ${REGISTRY}/karmada-controller-manager:${VERSION}
 	docker push ${REGISTRY}/karmada-scheduler:${VERSION}
+	docker push ${REGISTRY}/karmada-descheduler:${VERSION}
 	docker push ${REGISTRY}/karmada-webhook:${VERSION}
 	docker push ${REGISTRY}/karmada-agent:${VERSION}
 	docker push ${REGISTRY}/karmada-scheduler-estimator:${VERSION}
 	docker push ${REGISTRY}/karmada-interpreter-webhook-example:${VERSION}
 	docker push ${REGISTRY}/karmada-aggregated-apiserver:${VERSION}
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-controller-manager: karmada-controller-manager
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-controller-manager:${VERSION} --file=cluster/images/karmada-controller-manager/Dockerfile .
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-scheduler: karmada-scheduler
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-scheduler:${VERSION} --file=cluster/images/karmada-scheduler/Dockerfile .
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-descheduler: karmada-descheduler
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-descheduler:${VERSION} --file=cluster/images/karmada-descheduler/Dockerfile .
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-webhook: karmada-webhook
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-webhook:${VERSION} --file=cluster/images/karmada-webhook/Dockerfile .
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-agent: karmada-agent
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-agent:${VERSION} --file=cluster/images/karmada-agent/Dockerfile .
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-scheduler-estimator: karmada-scheduler-estimator
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-scheduler-estimator:${VERSION} --file=cluster/images/karmada-scheduler-estimator/Dockerfile .
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-interpreter-webhook-example: karmada-interpreter-webhook-example
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-interpreter-webhook-example:${VERSION} --file=cluster/images/karmada-interpreter-webhook-example/Dockerfile .
+
+# Build and push multi-platform image to DockerHub
+mp-image-karmada-aggregated-apiserver: karmada-aggregated-apiserver
+	docker buildx build --push --platform=${PLATFORMS} --tag=karmada/karmada-aggregated-apiserver:${VERSION} --file=cluster/images/karmada-aggregated-apiserver/Dockerfile .
+
+# Build and push multi-platform images to DockerHub.
+multi-platform-images: mp-image-karmada-controller-manager \
+ mp-image-karmada-scheduler \
+ mp-image-karmada-descheduler \
+ mp-image-karmada-webhook \
+ mp-image-karmada-agent \
+ mp-image-karmada-scheduler-estimator \
+ mp-image-karmada-interpreter-webhook-example \
+ mp-image-karmada-aggregated-apiserver

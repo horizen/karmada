@@ -27,10 +27,12 @@ import (
 	"k8s.io/utils/clock"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	clusterv1alpha1 "github.com/karmada-io/karmada/pkg/apis/cluster/v1alpha1"
+	"github.com/karmada-io/karmada/pkg/sharedcli/ratelimiterflag"
 	"github.com/karmada-io/karmada/pkg/util"
 	"github.com/karmada-io/karmada/pkg/util/helper"
 	"github.com/karmada-io/karmada/pkg/util/informermanager"
@@ -82,6 +84,7 @@ type ClusterStatusController struct {
 	ClusterLeaseControllers sync.Map
 
 	ClusterCacheSyncTimeout metav1.Duration
+	RateLimiterOptions      ratelimiterflag.Options
 }
 
 // Reconcile syncs status of the given member cluster.
@@ -113,7 +116,9 @@ func (c *ClusterStatusController) Reconcile(ctx context.Context, req controllerr
 
 // SetupWithManager creates a controller and register to controller manager.
 func (c *ClusterStatusController) SetupWithManager(mgr controllerruntime.Manager) error {
-	return controllerruntime.NewControllerManagedBy(mgr).For(&clusterv1alpha1.Cluster{}).WithEventFilter(c.PredicateFunc).Complete(c)
+	return controllerruntime.NewControllerManagedBy(mgr).For(&clusterv1alpha1.Cluster{}).WithEventFilter(c.PredicateFunc).WithOptions(controller.Options{
+		RateLimiter: ratelimiterflag.DefaultControllerRateLimiter(c.RateLimiterOptions),
+	}).Complete(c)
 }
 
 func (c *ClusterStatusController) syncClusterStatus(cluster *clusterv1alpha1.Cluster) (controllerruntime.Result, error) {

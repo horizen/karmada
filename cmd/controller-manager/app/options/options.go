@@ -10,6 +10,8 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	componentbaseconfig "k8s.io/component-base/config"
 
+	"github.com/karmada-io/karmada/pkg/features"
+	"github.com/karmada-io/karmada/pkg/sharedcli/ratelimiterflag"
 	"github.com/karmada-io/karmada/pkg/util"
 )
 
@@ -79,6 +81,25 @@ type Options struct {
 	// It can be set to "0" to disable the metrics serving.
 	// Defaults to ":8080".
 	MetricsBindAddress string
+	// concurrentClusterSyncs is the number of cluster objects that are
+	// allowed to sync concurrently.
+	ConcurrentClusterSyncs int
+	// ConcurrentClusterResourceBindingSyncs is the number of clusterresourcebinding objects that are
+	// allowed to sync concurrently.
+	ConcurrentClusterResourceBindingSyncs int
+	// ConcurrentWorkSyncs is the number of Work objects that are
+	// allowed to sync concurrently.
+	ConcurrentWorkSyncs int
+	// ConcurrentResourceBindingSyncs is the number of resourcebinding objects that are
+	// allowed to sync concurrently.
+	ConcurrentResourceBindingSyncs int
+	// ConcurrentNamespaceSyncs is the number of Namespace objects that are
+	// allowed to sync concurrently.
+	ConcurrentNamespaceSyncs int
+	// ConcurrentResourceTemplateSyncs is the number of resource templates that are allowed to sync concurrently.
+	ConcurrentResourceTemplateSyncs int
+
+	RateLimiterOpts ratelimiterflag.Options
 }
 
 // NewOptions builds an empty options.
@@ -95,8 +116,6 @@ func NewOptions() *Options {
 
 // AddFlags adds flags to the specified FlagSet.
 func (o *Options) AddFlags(flags *pflag.FlagSet, allControllers []string) {
-	flags.Lookup("kubeconfig").Usage = "Path to karmada control plane kubeconfig file."
-
 	flags.StringSliceVar(&o.Controllers, "controllers", []string{"*"}, fmt.Sprintf(
 		"A list of controllers to enable. '*' enables all on-by-default controllers, 'foo' enables the controller named 'foo', '-foo' disables the controller named 'foo'. All controllers: %s.",
 		strings.Join(allControllers, ", "),
@@ -134,4 +153,13 @@ func (o *Options) AddFlags(flags *pflag.FlagSet, allControllers []string) {
 	flags.DurationVar(&o.ClusterCacheSyncTimeout.Duration, "cluster-cache-sync-timeout", util.CacheSyncTimeout, "Timeout period waiting for cluster cache to sync.")
 	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 0, "Base frequency the informers are resynced.")
 	flags.StringVar(&o.MetricsBindAddress, "metrics-bind-address", ":8080", "The TCP address that the controller should bind to for serving prometheus metrics(e.g. 127.0.0.1:8088, :8088)")
+	flags.IntVar(&o.ConcurrentClusterSyncs, "concurrent-cluster-syncs", 5, "The number of Clusters that are allowed to sync concurrently.")
+	flags.IntVar(&o.ConcurrentClusterResourceBindingSyncs, "concurrent-clusterresourcebinding-syncs", 5, "The number of ClusterResourceBindings that are allowed to sync concurrently.")
+	flags.IntVar(&o.ConcurrentResourceBindingSyncs, "concurrent-resourcebinding-syncs", 5, "The number of ResourceBindings that are allowed to sync concurrently.")
+	flags.IntVar(&o.ConcurrentWorkSyncs, "concurrent-work-syncs", 5, "The number of Works that are allowed to sync concurrently.")
+	flags.IntVar(&o.ConcurrentNamespaceSyncs, "concurrent-namespace-syncs", 1, "The number of Namespaces that are allowed to sync concurrently.")
+	flags.IntVar(&o.ConcurrentResourceTemplateSyncs, "concurrent-resource-template-syncs", 5, "The number of resource templates that are allowed to sync concurrently.")
+
+	o.RateLimiterOpts.AddFlags(flags)
+	features.FeatureGate.AddFlag(flags)
 }

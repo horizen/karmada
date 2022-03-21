@@ -230,9 +230,11 @@ util::wait_apiservice_ready "${KARMADA_AGGREGATION_APISERVER_LABEL}"
 kubectl config use-context "${HOST_CLUSTER_NAME}"
 
 # deploy controller-manager on host cluster
-kubectl apply -f "${REPO_ROOT}/artifacts/deploy/controller-manager.yaml"
+kubectl apply -f "${REPO_ROOT}/artifacts/deploy/karmada-controller-manager.yaml"
 # deploy scheduler on host cluster
 kubectl apply -f "${REPO_ROOT}/artifacts/deploy/karmada-scheduler.yaml"
+# deploy descheduler on host cluster
+kubectl apply -f "${REPO_ROOT}/artifacts/deploy/karmada-descheduler.yaml"
 # deploy webhook on host cluster
 kubectl apply -f "${REPO_ROOT}/artifacts/deploy/karmada-webhook.yaml"
 

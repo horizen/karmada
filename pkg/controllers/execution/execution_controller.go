@@ -15,10 +15,12 @@ import (
 	"k8s.io/klog/v2"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	workv1alpha1 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha1"
+	"github.com/karmada-io/karmada/pkg/sharedcli/ratelimiterflag"
 	"github.com/karmada-io/karmada/pkg/util"
 	"github.com/karmada-io/karmada/pkg/util/helper"
 	"github.com/karmada-io/karmada/pkg/util/informermanager"
@@ -41,6 +43,7 @@ type Controller struct {
 	PredicateFunc        predicate.Predicate
 	InformerManager      informermanager.MultiClusterInformerManager
 	ClusterClientSetFunc func(clusterName string, client client.Client) (*util.DynamicClusterClient, error)
+	RatelimiterOptions   ratelimiterflag.Options
 }
 
 // Reconcile performs a full reconciliation for the object referred to by the Request.
@@ -100,6 +103,9 @@ func (c *Controller) SetupWithManager(mgr controllerruntime.Manager) error {
 		For(&workv1alpha1.Work{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		WithEventFilter(c.PredicateFunc).
+		WithOptions(controller.Options{
+			RateLimiter: ratelimiterflag.DefaultControllerRateLimiter(c.RatelimiterOptions),
+		}).
 		Complete(c)
 }
 

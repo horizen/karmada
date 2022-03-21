@@ -16,10 +16,12 @@ import (
 	"k8s.io/klog/v2"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	clusterv1alpha1 "github.com/karmada-io/karmada/pkg/apis/cluster/v1alpha1"
 	workv1alpha1 "github.com/karmada-io/karmada/pkg/apis/work/v1alpha1"
+	"github.com/karmada-io/karmada/pkg/sharedcli/ratelimiterflag"
 	"github.com/karmada-io/karmada/pkg/util"
 	"github.com/karmada-io/karmada/pkg/util/helper"
 	"github.com/karmada-io/karmada/pkg/util/informermanager"
@@ -34,19 +36,20 @@ const WorkStatusControllerName = "work-status-controller"
 
 // WorkStatusController is to sync status of Work.
 type WorkStatusController struct {
-	client.Client        // used to operate Work resources.
-	EventRecorder        record.EventRecorder
-	RESTMapper           meta.RESTMapper
-	InformerManager      informermanager.MultiClusterInformerManager
-	eventHandler         cache.ResourceEventHandler // eventHandler knows how to handle events from the member cluster.
-	StopChan             <-chan struct{}
-	WorkerNumber         int              // WorkerNumber is the number of worker goroutines
-	worker               util.AsyncWorker // worker process resources periodic from rateLimitingQueue.
-	ObjectWatcher        objectwatcher.ObjectWatcher
-	PredicateFunc        predicate.Predicate
-	ClusterClientSetFunc func(clusterName string, client client.Client) (*util.DynamicClusterClient, error)
-
-	ClusterCacheSyncTimeout metav1.Duration
+	client.Client   // used to operate Work resources.
+	EventRecorder   record.EventRecorder
+	RESTMapper      meta.RESTMapper
+	InformerManager informermanager.MultiClusterInformerManager
+	eventHandler    cache.ResourceEventHandler // eventHandler knows how to handle events from the member cluster.
+	StopChan        <-chan struct{}
+	worker          util.AsyncWorker // worker process resources periodic from rateLimitingQueue.
+	// ConcurrentWorkStatusSyncs is the number of Work status that are allowed to sync concurrently.
+	ConcurrentWorkStatusSyncs int
+	ObjectWatcher             objectwatcher.ObjectWatcher
+	PredicateFunc             predicate.Predicate
+	ClusterClientSetFunc      func(clusterName string, client client.Client) (*util.DynamicClusterClient, error)
+	ClusterCacheSyncTimeout   metav1.Duration
+	RateLimiterOptions        ratelimiterflag.Options
 }
 
 // Reconcile performs a full reconciliation for the object referred to by the Request.
@@ -114,8 +117,13 @@ func (c *WorkStatusController) getEventHandler() cache.ResourceEventHandler {
 
 // RunWorkQueue initializes worker and run it, worker will process resource asynchronously.
 func (c *WorkStatusController) RunWorkQueue() {
-	c.worker = util.NewAsyncWorker("work-status", generateKey, c.syncWorkStatus)
-	c.worker.Run(c.WorkerNumber, c.StopChan)
+	workerOptions := util.Options{
+		Name:          "work-status",
+		KeyFunc:       generateKey,
+		ReconcileFunc: c.syncWorkStatus,
+	}
+	c.worker = util.NewAsyncWorker(workerOptions)
+	c.worker.Run(c.ConcurrentWorkStatusSyncs, c.StopChan)
 }
 
 // generateKey generates a key from obj, the key contains cluster, GVK, namespace and name.
@@ -443,5 +451,7 @@ func (c *WorkStatusController) getSingleClusterManager(cluster *clusterv1alpha1.
 
 // SetupWithManager creates a controller and register to controller manager.
 func (c *WorkStatusController) SetupWithManager(mgr controllerruntime.Manager) error {
-	return controllerruntime.NewControllerManagedBy(mgr).For(&workv1alpha1.Work{}).WithEventFilter(c.PredicateFunc).Complete(c)
+	return controllerruntime.NewControllerManagedBy(mgr).For(&workv1alpha1.Work{}).WithEventFilter(c.PredicateFunc).WithOptions(controller.Options{
+		RateLimiter: ratelimiterflag.DefaultControllerRateLimiter(c.RateLimiterOptions),
+	}).Complete(c)
 }

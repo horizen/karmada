@@ -72,13 +72,16 @@ func HasScheduledReplica(scheduleResult []workv1alpha2.TargetCluster) bool {
 	return false
 }
 
-// GetBindingClusterNames will get clusterName list from bind clusters field
-func GetBindingClusterNames(targetClusters []workv1alpha2.TargetCluster) []string {
-	var clusterNames []string
-	for _, targetCluster := range targetClusters {
-		clusterNames = append(clusterNames, targetCluster.Name)
+// GetBindingClusterNames will get clusterName list from bind clusters field and requiredBy field.
+func GetBindingClusterNames(targetClusters []workv1alpha2.TargetCluster, bindingSnapshot []workv1alpha2.BindingSnapshot) []string {
+	clusterNames := util.ConvertToClusterNames(targetClusters)
+	for _, binding := range bindingSnapshot {
+		for _, targetCluster := range binding.Clusters {
+			clusterNames.Insert(targetCluster.Name)
+		}
 	}
-	return clusterNames
+
+	return clusterNames.List()
 }
 
 // FindOrphanWorks retrieves all works that labeled with current binding(ResourceBinding or ClusterResourceBinding) objects,
@@ -86,18 +89,18 @@ func GetBindingClusterNames(targetClusters []workv1alpha2.TargetCluster) []strin
 func FindOrphanWorks(c client.Client, bindingNamespace, bindingName string, clusterNames []string, scope apiextensionsv1.ResourceScope) ([]workv1alpha1.Work, error) {
 	var needJudgeWorks []workv1alpha1.Work
 	if scope == apiextensionsv1.NamespaceScoped {
-		workList, err := GetWorksByLabelSelector(c, labels.SelectorFromSet(labels.Set{
+		workList, err := GetWorksByLabelsSet(c, labels.Set{
 			workv1alpha2.ResourceBindingReferenceKey: names.GenerateBindingReferenceKey(bindingNamespace, bindingName),
-		}))
+		})
 		if err != nil {
 			klog.Errorf("Failed to get works by ResourceBinding(%s/%s): %v", bindingNamespace, bindingName, err)
 			return nil, err
 		}
 		needJudgeWorks = append(needJudgeWorks, workList.Items...)
 	} else {
-		workList, err := GetWorksByLabelSelector(c, labels.SelectorFromSet(labels.Set{
+		workList, err := GetWorksByLabelsSet(c, labels.Set{
 			workv1alpha2.ClusterResourceBindingReferenceKey: names.GenerateBindingReferenceKey("", bindingName),
-		}))
+		})
 		if err != nil {
 			klog.Errorf("Failed to get works by ClusterResourceBinding(%s): %v", bindingName, err)
 			return nil, err
@@ -196,14 +199,6 @@ func GetResourceBindings(c client.Client, ls labels.Set) (*workv1alpha2.Resource
 	return bindings, c.List(context.TODO(), bindings, listOpt)
 }
 
-// GetWorks returns a WorkList by labels
-func GetWorks(c client.Client, ls labels.Set) (*workv1alpha1.WorkList, error) {
-	works := &workv1alpha1.WorkList{}
-	listOpt := &client.ListOptions{LabelSelector: labels.SelectorFromSet(ls)}
-
-	return works, c.List(context.TODO(), works, listOpt)
-}
-
 // DeleteWorkByRBNamespaceAndName will delete all Work objects by ResourceBinding namespace and name.
 func DeleteWorkByRBNamespaceAndName(c client.Client, namespace, name string) error {
 	return DeleteWorks(c, labels.Set{
@@ -220,7 +215,7 @@ func DeleteWorkByCRBName(c client.Client, name string) error {
 
 // DeleteWorks will delete all Work objects by labels.
 func DeleteWorks(c client.Client, selector labels.Set) error {
-	workList, err := GetWorks(c, selector)
+	workList, err := GetWorksByLabelsSet(c, selector)
 	if err != nil {
 		klog.Errorf("Failed to get works by label %v: %v", selector, err)
 		return err

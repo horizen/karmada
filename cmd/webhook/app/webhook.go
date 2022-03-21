@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/term"
 	"k8s.io/klog/v2"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -15,12 +17,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 
 	"github.com/karmada-io/karmada/cmd/webhook/app/options"
+	"github.com/karmada-io/karmada/pkg/sharedcli"
+	"github.com/karmada-io/karmada/pkg/sharedcli/klogflag"
 	"github.com/karmada-io/karmada/pkg/util/gclient"
 	"github.com/karmada-io/karmada/pkg/version"
 	"github.com/karmada-io/karmada/pkg/version/sharedcommand"
 	"github.com/karmada-io/karmada/pkg/webhook/clusteroverridepolicy"
 	"github.com/karmada-io/karmada/pkg/webhook/clusterpropagationpolicy"
 	"github.com/karmada-io/karmada/pkg/webhook/configuration"
+	"github.com/karmada-io/karmada/pkg/webhook/federatedresourcequota"
 	"github.com/karmada-io/karmada/pkg/webhook/overridepolicy"
 	"github.com/karmada-io/karmada/pkg/webhook/propagationpolicy"
 	"github.com/karmada-io/karmada/pkg/webhook/work"
@@ -53,14 +58,22 @@ func NewWebhookCommand(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	// Init log flags
-	// TODO(@RainbowMango): Group the flags to "logs" flag set.
-	klog.InitFlags(flag.CommandLine)
+	fss := cliflag.NamedFlagSets{}
 
-	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+	genericFlagSet := fss.FlagSet("generic")
+	genericFlagSet.AddGoFlagSet(flag.CommandLine)
+	opts.AddFlags(genericFlagSet)
+
+	// Set klog flags
+	logsFlagSet := fss.FlagSet("logs")
+	klogflag.Add(logsFlagSet)
+
 	cmd.AddCommand(sharedcommand.NewCmdVersion(os.Stdout, "karmada-webhook"))
-	opts.AddFlags(cmd.Flags())
+	cmd.Flags().AddFlagSet(genericFlagSet)
+	cmd.Flags().AddFlagSet(logsFlagSet)
 
+	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
+	sharedcli.SetUsageAndHelpFunc(cmd, fss, cols)
 	return cmd
 }
 
@@ -79,6 +92,8 @@ func Run(ctx context.Context, opts *options.Options) error {
 			Host:          opts.BindAddress,
 			Port:          opts.SecurePort,
 			CertDir:       opts.CertDir,
+			CertName:      opts.CertName,
+			KeyName:       opts.KeyName,
 			TLSMinVersion: opts.TLSMinVersion,
 		},
 		LeaderElection:         false,
@@ -102,6 +117,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 	hookServer.Register("/mutate-work", &webhook.Admission{Handler: &work.MutatingAdmission{}})
 	hookServer.Register("/convert", &conversion.Webhook{})
 	hookServer.Register("/validate-resourceinterpreterwebhookconfiguration", &webhook.Admission{Handler: &configuration.ValidatingAdmission{}})
+	hookServer.Register("/validate-federatedresourcequota", &webhook.Admission{Handler: &federatedresourcequota.ValidatingAdmission{}})
 	hookServer.WebhookMux.Handle("/readyz/", http.StripPrefix("/readyz/", &healthz.Handler{}))
 
 	// blocks until the context is done.
