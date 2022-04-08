@@ -224,3 +224,20 @@ func visitContainerConfigmapNames(container *corev1.Container, visitor Visitor) 
 	}
 	return true
 }
+
+// VisitPodPVCNames invokes the visitor function with the name of every pvc
+// referenced by the pod spec. If visitor returns false, visiting is short-circuited.
+// Returns true if visiting completed, false if visiting was short-circuited.
+func VisitPodPVCNames(pod *corev1.Pod, visitor Visitor) bool {
+	visitor = skipEmptyNames(visitor)
+	var source *corev1.VolumeSource
+	for i := range pod.Spec.Volumes {
+		source = &pod.Spec.Volumes[i].VolumeSource
+		if source.PersistentVolumeClaim != nil {
+			if !visitor(source.PersistentVolumeClaim.ClaimName) {
+				return false
+			}
+		}
+	}
+	return true
+}

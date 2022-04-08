@@ -85,7 +85,7 @@ type ResourceDetector struct {
 
 	stopCh <-chan struct{}
 
-	EnabledResource map[string]struct{}
+	PropagatedReservedResources map[string]struct{}
 }
 
 // Start runs the detector, never stop until stopCh closed.
@@ -252,7 +252,17 @@ func (d *ResourceDetector) Reconcile(key util.QueueKey) error {
 		return d.ApplyClusterPolicy(object, clusterWideKey, clusterPolicy)
 	}
 
-	// TODO(willyao) auto create propagation policy when annotation found
+	// auto create propagation policy when annotation found
+	if isAutoProvisionObject(object) {
+		d.RemoveWaiting(clusterWideKey)
+		err := d.autoProvisionResourceBinding(clusterWideKey, object)
+		if err != nil {
+			d.EventRecorder.Event(object, corev1.EventTypeWarning, workv1alpha2.EventReasonAutoProvisionPolicyFailed, err.Error())
+		} else {
+			d.EventRecorder.Event(object, corev1.EventTypeNormal, workv1alpha2.EventReasonAutoProvisionPolicySucceed, err.Error())
+		}
+		return err
+	}
 
 	if d.isWaiting(clusterWideKey) {
 		// reaching here means there is no appropriate policy for the object
@@ -264,6 +274,91 @@ func (d *ResourceDetector) Reconcile(key util.QueueKey) error {
 	// see https://github.com/karmada-io/karmada/issues/1195
 	d.AddWaiting(clusterWideKey)
 	return fmt.Errorf("no matched propagation policy")
+}
+
+func isAutoProvisionObject(object *unstructured.Unstructured) bool {
+	// deployment replicaset mpijob tfjob sparkapplication pod
+	// 独立于pod的：service ingress hpa snapshot
+	// pod关联的：pvc storageclass configmap secret
+	annotations := object.GetAnnotations()
+	if _, ok := annotations["ti.cloud.tencent.com/task-type"]; !ok {
+		return false
+	}
+	if _, ok := annotations["ti.cloud.tencent.com/region"]; !ok {
+		return false
+	}
+	if _, ok := annotations["ti.cloud.tencent.com/user-id"]; !ok {
+		return false
+	}
+	return true
+}
+
+func getClusterType(taskType string) []string {
+	if taskType == "Inference" {
+		return []string{"Inference", "TrainingAndInference"}
+	} else {
+		return []string{"Training", "TrainingAndInference"}
+	}
+}
+
+func (d *ResourceDetector) autoProvisionResourceBinding(clusterWideKey keys.ClusterWideKey, object *unstructured.Unstructured) error {
+	annotations := object.GetAnnotations()
+	taskType := annotations["ti.cloud.tencent.com/task-type"]
+	region := annotations["ti.cloud.tencent.com/region"]
+	clusterId := annotations["ti.cloud.tencent.com/cluster-id"]
+	spec := policyv1alpha1.PropagationSpec{
+		ResourceSelectors: []policyv1alpha1.ResourceSelector{
+			{
+				APIVersion: object.GetAPIVersion(),
+				Kind: object.GetKind(),
+				Name: object.GetName(),
+				Namespace: object.GetNamespace(),
+			},
+		},
+		PropagateDeps: true,
+		Placement: policyv1alpha1.Placement{
+			ClusterAffinity: &policyv1alpha1.ClusterAffinity{},
+		},
+	}
+	if clusterId != "" {
+		spec.Placement.ClusterAffinity.ClusterNames = []string{clusterId}
+	} else {
+		spec.Placement.ClusterAffinity.LabelSelector = &metav1.LabelSelector{
+			MatchLabels: map[string]string {
+				"ti.cloud.tencent.com/region": region,
+			},
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key: "ti.cloud.tencent.com/cluster-type",
+					Operator: metav1.LabelSelectorOpIn,
+					Values: getClusterType(taskType),
+				},
+			},
+		}
+	}
+	ns := object.GetNamespace()
+	if ns != "" {
+		policy := &policyv1alpha1.PropagationPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns,
+				Name: object.GetName(),
+				Labels: object.GetLabels(),
+				Annotations: object.GetAnnotations(),
+			},
+			Spec: spec,
+		}
+		return d.ApplyPolicy(object, clusterWideKey, policy)
+	} else {
+		policy := &policyv1alpha1.ClusterPropagationPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: object.GetName(),
+				Labels: object.GetLabels(),
+				Annotations: object.GetAnnotations(),
+			},
+			Spec: spec,
+		}
+		return d.ApplyClusterPolicy(object, clusterWideKey, policy)
+	}
 }
 
 // EventFilter tells if an object should be take care of.
@@ -308,7 +403,7 @@ func (d *ResourceDetector) EventFilter(obj interface{}) bool {
 		} else {
 			resourceTag = fmt.Sprintf("%s/%s/%s", clusterWideKey.Kind, clusterWideKey.Namespace, clusterWideKey.Name)
 		}
-		if _, ok := d.EnabledResource[resourceTag]; !ok {
+		if _, ok := d.PropagatedReservedResources[resourceTag]; !ok {
 			return false
 		}
 	}
@@ -436,23 +531,27 @@ func (d *ResourceDetector) LookForMatchedClusterPolicy(object *unstructured.Unst
 
 // ApplyPolicy starts propagate the object referenced by object key according to PropagationPolicy.
 func (d *ResourceDetector) ApplyPolicy(object *unstructured.Unstructured, objectKey keys.ClusterWideKey, policy *policyv1alpha1.PropagationPolicy) (err error) {
-	klog.Infof("Applying policy(%s%s) for object: %s", policy.Namespace, policy.Name, objectKey)
-	defer func() {
-		if err != nil {
-			d.EventRecorder.Eventf(object, corev1.EventTypeWarning, workv1alpha2.EventReasonApplyPolicyFailed, "Apply policy(%s/%s) failed", policy.Namespace, policy.Name)
-		} else {
-			d.EventRecorder.Eventf(object, corev1.EventTypeNormal, workv1alpha2.EventReasonApplyPolicySucceed, "Apply policy(%s/%s) succeed", policy.Namespace, policy.Name)
+	var policyLabels map[string]string
+	// 针对手动创建的policy
+	if policy.ResourceVersion != "" {
+		klog.Infof("Applying policy(%s%s) for object: %s", policy.Namespace, policy.Name, objectKey)
+		defer func() {
+			if err != nil {
+				d.EventRecorder.Eventf(object, corev1.EventTypeWarning, workv1alpha2.EventReasonApplyPolicyFailed, "Apply policy(%s/%s) failed", policy.Namespace, policy.Name)
+			} else {
+				d.EventRecorder.Eventf(object, corev1.EventTypeNormal, workv1alpha2.EventReasonApplyPolicySucceed, "Apply policy(%s/%s) succeed", policy.Namespace, policy.Name)
+			}
+		}()
+
+		if err := d.ClaimPolicyForObject(object, policy.Namespace, policy.Name); err != nil {
+			klog.Errorf("Failed to claim policy(%s) for object: %s", policy.Name, object)
+			return err
 		}
-	}()
 
-	if err := d.ClaimPolicyForObject(object, policy.Namespace, policy.Name); err != nil {
-		klog.Errorf("Failed to claim policy(%s) for object: %s", policy.Name, object)
-		return err
-	}
-
-	policyLabels := map[string]string{
-		policyv1alpha1.PropagationPolicyNamespaceLabel: policy.GetNamespace(),
-		policyv1alpha1.PropagationPolicyNameLabel:      policy.GetName(),
+		policyLabels = map[string]string{
+			policyv1alpha1.PropagationPolicyNamespaceLabel: policy.GetNamespace(),
+			policyv1alpha1.PropagationPolicyNameLabel:      policy.GetName(),
+		}
 	}
 
 	binding, err := d.BuildResourceBinding(object, objectKey, policyLabels, policy.Spec.PropagateDeps)
@@ -497,22 +596,26 @@ func (d *ResourceDetector) ApplyPolicy(object *unstructured.Unstructured, object
 
 // ApplyClusterPolicy starts propagate the object referenced by object key according to ClusterPropagationPolicy.
 func (d *ResourceDetector) ApplyClusterPolicy(object *unstructured.Unstructured, objectKey keys.ClusterWideKey, policy *policyv1alpha1.ClusterPropagationPolicy) (err error) {
-	klog.Infof("Applying cluster policy(%s) for object: %s", policy.Name, objectKey)
-	defer func() {
-		if err != nil {
-			d.EventRecorder.Eventf(object, corev1.EventTypeWarning, workv1alpha2.EventReasonApplyPolicyFailed, "Apply cluster policy(%s) failed", policy.Name)
-		} else {
-			d.EventRecorder.Eventf(object, corev1.EventTypeNormal, workv1alpha2.EventReasonApplyPolicySucceed, "Apply policy(%s/%s) succeed", policy.Name)
+	var policyLabels map[string]string
+	// 针对手动创建的policy
+	if policy.ResourceVersion != "" {
+		klog.Infof("Applying cluster policy(%s) for object: %s", policy.Name, objectKey)
+		defer func() {
+			if err != nil {
+				d.EventRecorder.Eventf(object, corev1.EventTypeWarning, workv1alpha2.EventReasonApplyPolicyFailed, "Apply cluster policy(%s) failed", policy.Name)
+			} else {
+				d.EventRecorder.Eventf(object, corev1.EventTypeNormal, workv1alpha2.EventReasonApplyPolicySucceed, "Apply policy(%s/%s) succeed", policy.Name)
+			}
+		}()
+
+		if err := d.ClaimClusterPolicyForObject(object, policy.Name); err != nil {
+			klog.Errorf("Failed to claim cluster policy(%s) for object: %s", policy.Name, object)
+			return err
 		}
-	}()
 
-	if err := d.ClaimClusterPolicyForObject(object, policy.Name); err != nil {
-		klog.Errorf("Failed to claim cluster policy(%s) for object: %s", policy.Name, object)
-		return err
-	}
-
-	policyLabels := map[string]string{
-		policyv1alpha1.ClusterPropagationPolicyLabel: policy.GetName(),
+		policyLabels = map[string]string{
+			policyv1alpha1.ClusterPropagationPolicyLabel: policy.GetName(),
+		}
 	}
 
 	// Build `ResourceBinding` or `ClusterResourceBinding` according to the resource template's scope.

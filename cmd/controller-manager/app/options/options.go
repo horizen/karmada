@@ -100,6 +100,8 @@ type Options struct {
 	ConcurrentResourceTemplateSyncs int
 
 	RateLimiterOpts ratelimiterflag.Options
+	// EnableReservedResources indicates comma separated resources that should be propagating although namespace is reserved.
+	PropagatedReservedResources []string
 }
 
 // NewOptions builds an empty options.
@@ -162,4 +164,8 @@ func (o *Options) AddFlags(flags *pflag.FlagSet, allControllers []string) {
 
 	o.RateLimiterOpts.AddFlags(flags)
 	features.FeatureGate.AddFlag(flags)
+
+	flags.StringSliceVar(&o.PropagatedReservedResources, "propagated-reserved-resources", []string{}, "Semicolon separated resources that should be propagated although it is in reserved namespace. Supported formats are:\n" +
+		"<kind>/<namespace>/<name> for namespaced resource\n" +
+		"<kind>/<name> for cluster scoped resource")
 }

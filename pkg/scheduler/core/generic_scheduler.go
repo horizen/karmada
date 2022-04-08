@@ -129,6 +129,7 @@ func (g *genericScheduler) selectClusters(clustersScore framework.ClusterScoreLi
 		return g.matchSpreadConstraints(clusters, spreadConstraints)
 	}
 
+	// TODO(willyao) select best cluster for workload but daemonset
 	return clusters
 }
 

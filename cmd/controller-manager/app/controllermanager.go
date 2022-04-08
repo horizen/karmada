@@ -416,6 +416,10 @@ func setupControllers(mgr controllerruntime.Manager, opts *options.Options, stop
 	for _, ns := range opts.SkippedPropagatingNamespaces {
 		skippedPropagatingNamespaces[ns] = struct{}{}
 	}
+	propagatedReservedResources := map[string]struct{}{}
+	for _, r := range opts.PropagatedReservedResources {
+		propagatedReservedResources[r] = struct{}{}
+	}
 
 	controlPlaneInformerManager := informermanager.NewSingleClusterInformerManager(dynamicClientSet, 0, stopChan)
 
@@ -439,6 +443,7 @@ func setupControllers(mgr controllerruntime.Manager, opts *options.Options, stop
 		ConcurrentResourceTemplateSyncs: opts.ConcurrentResourceTemplateSyncs,
 		ConcurrentResourceBindingSyncs:  opts.ConcurrentResourceBindingSyncs,
 		RateLimiterOptions:              opts.RateLimiterOpts,
+		PropagatedReservedResources:     propagatedReservedResources,
 	}
 	if err := mgr.Add(resourceDetector); err != nil {
 		klog.Fatalf("Failed to setup resource detector: %v", err)

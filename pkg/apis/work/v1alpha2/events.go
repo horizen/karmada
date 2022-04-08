@@ -24,4 +24,9 @@ const (
 	EventReasonDescheduleBindingFailed = "DescheduleBindingFailed"
 	// EventReasonDescheduleBindingSucceed indicates that deschedule binding succeed.
 	EventReasonDescheduleBindingSucceed = "DescheduleBindingSucceed"
+
+	// EventReasonAutoProvisionPolicySucceed indicates than auto provision resource binding succeed
+	EventReasonAutoProvisionPolicySucceed = "AutoProvisionPolicySucceed"
+	// EventReasonAutoProvisionPolicyFailed indicates than auto provision resource binding failed
+	EventReasonAutoProvisionPolicyFailed = "AutoProvisionPolicyFailed"
 )

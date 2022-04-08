@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
@@ -48,6 +49,7 @@ const (
 var supportedTypes = []schema.GroupVersionResource{
 	corev1.SchemeGroupVersion.WithResource("configmaps"),
 	corev1.SchemeGroupVersion.WithResource("secrets"),
+	corev1.SchemeGroupVersion.WithResource("persistentvolumeclaims"),
 }
 
 // DependenciesDistributor is to automatically propagate relevant resources.
@@ -147,7 +149,24 @@ func (d *DependenciesDistributor) OnAdd(obj interface{}) {
 
 // OnUpdate handles object update event and push the object to queue.
 func (d *DependenciesDistributor) OnUpdate(oldObj, newObj interface{}) {
-	d.OnAdd(newObj)
+	oldRuntimeObj, ok := oldObj.(runtime.Object)
+	if !ok {
+		return
+	}
+	if oldRuntimeObj.GetObjectKind().GroupVersionKind().Kind == util.PersistentVolumeClaimKind {
+		oldPVC := oldObj.(*corev1.PersistentVolumeClaim)
+		newPVC := newObj.(*corev1.PersistentVolumeClaim)
+		if !reflect.DeepEqual(oldPVC.Spec, newPVC.Spec) ||
+			!reflect.DeepEqual(oldPVC.Labels, newPVC.Labels) ||
+			!reflect.DeepEqual(oldPVC.Annotations, newPVC.Annotations) ||
+			!reflect.DeepEqual(oldPVC.Finalizers, newPVC.Finalizers) {
+			d.OnAdd(newObj)
+		} else {
+			klog.V(4).Infof("pvc not changed")
+		}
+	} else {
+		d.OnAdd(newObj)
+	}
 }
 
 // OnDelete handles object delete event and push the object to queue.
@@ -581,6 +600,7 @@ func buildAttachedBinding(binding *workv1alpha2.ResourceBinding, object *unstruc
 				Name:            object.GetName(),
 				ResourceVersion: object.GetResourceVersion(),
 			},
+			PropagateDeps: binding.Spec.PropagateDeps,
 			RequiredBy: result,
 		},
 	}

@@ -158,6 +158,8 @@ func (s *Scheduler) worker() {
 }
 
 func (s *Scheduler) getPlacement(resourceBinding *workv1alpha2.ResourceBinding) (policyv1alpha1.Placement, string, error) {
+	// TODO(willyao) build placement for workload which not define propagation policy
+
 	var placement policyv1alpha1.Placement
 	var clusterPolicyName string
 	var policyName string
@@ -379,6 +381,7 @@ func (s *Scheduler) scheduleResourceBinding(resourceBinding *workv1alpha2.Resour
 		return err
 	}
 
+	// TODO(willyao) add plugin for
 	scheduleResult, err := s.Algorithm.Schedule(context.TODO(), &placement, &resourceBinding.Spec)
 	if err != nil {
 		klog.Errorf("Failed scheduling ResourceBinding %s/%s: %v", resourceBinding.Namespace, resourceBinding.Name, err)

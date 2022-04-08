@@ -25,6 +25,8 @@ func getAllDefaultDependenciesInterpreter() map[schema.GroupVersionKind]dependen
 	s[corev1.SchemeGroupVersion.WithKind(util.PodKind)] = getPodDependencies
 	s[appsv1.SchemeGroupVersion.WithKind(util.DaemonSetKind)] = getDaemonSetDependencies
 	s[appsv1.SchemeGroupVersion.WithKind(util.StatefulSetKind)] = getStatefulSetDependencies
+
+	s[corev1.SchemeGroupVersion.WithKind(util.PersistentVolumeClaimKind)] = getPVCDependencies
 	return s
 }
 
@@ -96,6 +98,7 @@ func getStatefulSetDependencies(object *unstructured.Unstructured) ([]configv1al
 func getDependenciesFromPodTemplate(podObj *corev1.Pod) ([]configv1alpha1.DependentObjectReference, error) {
 	dependentConfigMaps := getConfigMapNames(podObj)
 	dependentSecrets := getSecretNames(podObj)
+	dependentPVCs := getPVCNames(podObj)
 
 	var dependentObjectRefs []configv1alpha1.DependentObjectReference
 	for cm := range dependentConfigMaps {
@@ -116,7 +119,31 @@ func getDependenciesFromPodTemplate(podObj *corev1.Pod) ([]configv1alpha1.Depend
 		})
 	}
 
+	for pvc := range dependentPVCs {
+		dependentObjectRefs = append(dependentObjectRefs, configv1alpha1.DependentObjectReference{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+			Namespace:  podObj.Namespace,
+			Name:       pvc,
+		})
+	}
 	return dependentObjectRefs, nil
+}
+
+// pvc的依赖是storageclass
+func getPVCDependencies(object *unstructured.Unstructured) ([]configv1alpha1.DependentObjectReference, error) {
+	pvc, err := helper.ConvertToPVC(object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert PVC from unstructured object: %v", err)
+	}
+
+	return []configv1alpha1.DependentObjectReference{
+		{
+			APIVersion: "storage.k8s.io/v1",
+			Kind: "StorageClass",
+			Name: *pvc.Spec.StorageClassName,
+		},
+	}, nil
 }
 
 func getSecretNames(pod *corev1.Pod) sets.String {
@@ -131,6 +158,15 @@ func getSecretNames(pod *corev1.Pod) sets.String {
 func getConfigMapNames(pod *corev1.Pod) sets.String {
 	result := sets.NewString()
 	lifted.VisitPodConfigmapNames(pod, func(name string) bool {
+		result.Insert(name)
+		return true
+	})
+	return result
+}
+
+func getPVCNames(pod *corev1.Pod) sets.String {
+	result := sets.NewString()
+	lifted.VisitPodPVCNames(pod, func(name string) bool {
 		result.Insert(name)
 		return true
 	})

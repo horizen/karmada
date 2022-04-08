@@ -1,7 +1,9 @@
 package helper
 
 import (
+	snapv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	asv1 "k8s.io/api/autoscaling/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -148,6 +150,36 @@ func ConvertToService(obj *unstructured.Unstructured) (*corev1.Service, error) {
 // ConvertToIngress converts a Service object from unstructured to typed.
 func ConvertToIngress(obj *unstructured.Unstructured) (*extensionsv1beta1.Ingress, error) {
 	typedObj := &extensionsv1beta1.Ingress{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), typedObj); err != nil {
+		return nil, err
+	}
+
+	return typedObj, nil
+}
+
+// ConvertToPVC converts a PVC object from unstructured to typed.
+func ConvertToPVC(obj *unstructured.Unstructured) (*corev1.PersistentVolumeClaim, error) {
+	typedObj := &corev1.PersistentVolumeClaim{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), typedObj); err != nil {
+		return nil, err
+	}
+
+	return typedObj, nil
+}
+
+// ConvertToVolumeSnapshot converts a Snapshot object from unstructured to typed.
+func ConvertToVolumeSnapshot(obj *unstructured.Unstructured) (*snapv1.VolumeSnapshot, error) {
+	typedObj := &snapv1.VolumeSnapshot{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), typedObj); err != nil {
+		return nil, err
+	}
+
+	return typedObj, nil
+}
+
+// ConvertToHPA converts a hpa object from unstructured to typed.
+func ConvertToHPA(obj *unstructured.Unstructured) (*asv1.HorizontalPodAutoscaler, error) {
+	typedObj := &asv1.HorizontalPodAutoscaler{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), typedObj); err != nil {
 		return nil, err
 	}

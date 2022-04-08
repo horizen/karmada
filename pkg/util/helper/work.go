@@ -23,6 +23,7 @@ func CreateOrUpdateWork(client client.Client, workMeta metav1.ObjectMeta, resour
 		klog.Errorf("Failed to marshal workload(%s/%s), Error: %v", workload.GetNamespace(), workload.GetName(), err)
 		return err
 	}
+	klog.V(5).Infof("workload spec: %v", string(workloadJSON))
 
 	work := &workv1alpha1.Work{
 		ObjectMeta: workMeta,

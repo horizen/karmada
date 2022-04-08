@@ -109,6 +109,9 @@ const (
 	ClusterRoleKind = "ClusterRole"
 	// ClusterRoleBindingKind indicates the target resource is a clusterrolebinding
 	ClusterRoleBindingKind = "ClusterRoleBinding"
+
+	// VolumeSnapshotKind indicates the target resource is a volumesnapshot
+	VolumeSnapshotKind = "VolumeSnapshot"
 )
 
 // Define resource filed
